@@ -6,34 +6,78 @@ def assert_type(object, type)
 	end
 end
 
+def assert_arg_types(method_signature, *args)
+	if method_signature.arg_types.length != args.length then
+		raise "Wrong number of arguments for #{method_signature}. #{args.length} arguments specified, #{method_signature.arg_types.length} required."
+	end
+
+	args.each_with_index do |specified_arg, i|
+		type = method_signature.arg_types[i]
+		if not specified_arg.is_a?(type) then
+			raise "Wrong type of argument #{i + 1} for #{method_signature}. Expected to be #{type}, but was #{specified_arg.type}."
+		end
+	end
+end
+
 def assert_method(target, method_sig)
 	if not target.implements_method?(method_sig) then
 		raise "Object of class '#{target.class}' does not implement #{method_sig}."
 	end
 end
 
-# All classes that begin with "PR" are classes that represent 
-# classes/types in Prometheus
+# All classes that are prefixed with "PR" are classes that represent 
+# classes/types in Prometheus.
 
 class PRObject
-	attr_reader :_mtable
+	@@_mtable = {} # Method (signature) table
 	attr_accessor :super
+
 	def initialize
-		@_mtable = {} # Method (signature) table
 		@super = nil
 	end
 
 	# This method needs to be called in order to expose methods
 	# in Prometheus
-	def add_method(method_signature)
-		@_mtable[method_signature.name.to_sym] = method_signature
+	def self.add_method(method_signature)
+		@@_mtable[method_signature.name.to_sym] = method_signature
 	end
 
 	def implements_method?(method_signature)
-		@_mtable.each do |m|
+		@@_mtable.each_value do |m|
 			return true if m.eql?(method_signature)
 		end
 		return false
+	end
+
+	def self._mtable
+		@@_mtable
+	end
+end
+
+class PRMethodSignature
+	attr_reader :name, :return_type, :arg_types, :class_method
+
+	def initialize(name, return_type, class_method, arg_types)
+		@name, @return_type, @class_method, @arg_types = name, return_type, class_method, arg_types
+	end
+
+	def is_class_method?
+		@class_method
+	end
+
+	def eql?(other)
+		return false if not other.is_a?(PRMethodSignature)
+		return false if not other.name == @name
+		return false if not other.return_type == @return_type
+		return false if not other.class_method == @class_method
+		return false if not other.arg_types.eql?(@arg_types)
+		true
+	end
+
+	def to_s
+		arg_list = @arg_types.join(", ")
+		prefix = if is_class_method? then "+" else "-" end
+		"`#{prefix} #{@return_type} #{@name}(#{arg_list})`"
 	end
 end
 
@@ -53,6 +97,8 @@ class PRNumber < PRObject
 		"<#{self.class}:0x%08x:#{@_value}>" % self.object_id
 	end
 end
+# Expose methods on PRNumber
+PRNumber.add_method(PRMethodSignature.new(:add, PRNumber, false, [PRNumber]))
 
 class PRInteger < PRNumber
 	def initialize(n)
@@ -68,35 +114,23 @@ class PRFloat < PRNumber
 	end
 end
 
-class PRMethodSignature
-	attr_reader :name, :return_type, :arg_types
+# ===== END OF CLASSES ======
 
-	def initialize(name, return_type, class_method, arg_types)
-		@name, @return_type, @class_method, @arg_types = name, return_type, class_method, arg_types
+def msg_send(prometheus_obj, method_signature, *args)
+	current = prometheus_obj
+	while current != nil do
+		if current.implements_method?(method_signature) then
+			assert_arg_types(method_signature, *args)
+			puts "Invoking method #{method_signature} on #{current}"
+			return current.send(method_signature.name.to_sym, *args)
+		else
+			current = current.super
+		end
 	end
-
-	def is_class_method?
-		@class_method
-	end
-
-	def eql?(other)
-		puts "comp"
-		return false if not other.is_a?(PRMethodSignature)
-		puts "type"
-		return false if not other.name == @name
-		puts "name"
-		return false if not other.return_type == @return_type
-		puts "return"
-		return false if not other.class_method == @class_method
-		puts "class"
-		return false if not other.arg_types.eql?(@arg_types)
-		puts "args"
-		true
-	end
-
-	def to_s
-		arg_list = @arg_types.join(", ")
-		prefix = if is_class_method? then "+" else "-" end
-		"`#{prefix} #{@return_type} #{@name}(#{arg_list})`"
-	end
+	raise "Missing method #{method_signature}. Neither #{prometheus_obj} nor any superclass implements #{method_signature}."
 end
+
+f = PRFloat.new(687.3)
+m = PRMethodSignatureForObject(f, :add)
+puts msg_send(f, m, PRInteger.new(650)) # Should work
+puts msg_send(f, m, PRObject.new) # Should raise an exception
