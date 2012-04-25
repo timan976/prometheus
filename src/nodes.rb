@@ -52,7 +52,15 @@ class MethodCallNode
 
 	def evaluate
 		assert_method(@target, @method)
+	end
+end
 
-		
+class VariableDeclarationNode
+	def initialize(type, decl_node, value=nil)
+		@type, @decl_node, @value = type, decl_node, value
+	end
+
+	def evaluate
+		puts "Declared a variable '#{@decl_node}' of type #{@type} with the value #{@value}"
 	end
 end

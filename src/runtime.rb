@@ -28,36 +28,10 @@ end
 # All classes that are prefixed with "PR" are classes that represent 
 # classes/types in Prometheus.
 
-class PRObject
-	@@_mtable = {} # Method (signature) table
-	attr_accessor :super
-
-	def initialize
-		@super = nil
-	end
-
-	# This method needs to be called in order to expose methods
-	# in Prometheus
-	def self.add_method(method_signature)
-		@@_mtable[method_signature.name.to_sym] = method_signature
-	end
-
-	def implements_method?(method_signature)
-		@@_mtable.each_value do |m|
-			return true if m.eql?(method_signature)
-		end
-		return false
-	end
-
-	def self._mtable
-		@@_mtable
-	end
-end
-
 class PRMethodSignature
 	attr_reader :name, :return_type, :arg_types, :class_method
 
-	def initialize(name, return_type, class_method, arg_types)
+	def initialize(name, return_type, class_method, arg_types=[])
 		@name, @return_type, @class_method, @arg_types = name, return_type, class_method, arg_types
 	end
 
@@ -80,6 +54,37 @@ class PRMethodSignature
 		"`#{prefix} #{@return_type} #{@name}(#{arg_list})`"
 	end
 end
+
+class PRObject
+	@@_mtable = {} # Method (signature) table
+	attr_accessor :super
+
+	def initialize
+		@super = nil
+	end
+
+	# This method needs to be called in order to expose methods
+	# in Prometheus
+	def self.add_method(method_signature)
+		@@_mtable[method_signature.name.to_sym] = method_signature
+	end
+
+	def init
+		puts "#{self.class} init"
+	end
+
+	def implements_method?(method_signature)
+		@@_mtable.each_value do |m|
+			return true if m.eql?(method_signature)
+		end
+		return false
+	end
+
+	def self._mtable
+		@@_mtable
+	end
+end
+PRObject.add_method(PRMethodSignature.new(:init, PRObject, false))
 
 class PRNumber < PRObject
 	attr_accessor :_value
@@ -131,6 +136,7 @@ def msg_send(prometheus_obj, method_signature, *args)
 end
 
 f = PRFloat.new(687.3)
+puts msg_send(f, PRMethodSignatureForObject(f, :init))
 m = PRMethodSignatureForObject(f, :add)
 puts msg_send(f, m, PRInteger.new(650)) # Should work
-puts msg_send(f, m, PRObject.new) # Should raise an exception
+#puts msg_send(f, m, PRObject.new) # Should raise an exception

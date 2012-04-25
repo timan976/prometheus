@@ -65,12 +65,12 @@ spec_qualifier_list    ::= type_spec spec_qualifier_list
 #                         |            ':' const_exp
                         
 declarator             ::= id
-                         | '(' declarator ')'
+#                        | '(' declarator ')'
                          | declarator '[' const_exp ']'
 #                        | declarator '['         ']'
-                         | declarator '(' param_type_list ')'
-                         | declarator '(' id_list ')'
-                         | declarator '('         ')'
+#                        | declarator '(' param_type_list ')'
+#                        | declarator '(' id_list ')'
+#                        | declarator '('         ')'
                         
 #type_qualifier_list    ::= type_qualifier
 #                         | type_qualifier_list type_qualifier

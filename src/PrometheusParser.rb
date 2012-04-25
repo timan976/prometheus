@@ -13,12 +13,12 @@ class PrometheusParser
 			token(/^((?:\d+)?\.\d+)/) { |d| puts "float"; ConstantNode.new(PRFloat.new(d.to_f)) }
 			# Integer
 			token(/^(\d+)/) { |d| puts "int"; ConstantNode.new(PRInteger.new(d.to_i)) }
+			# Whitespace
+			token(/^(\s)/)
 			# Variable/function name
 			token(/(^[^\d][a-zA-Z_]+)/) { |w| puts "var"; w }
 			# Classname
-			token(/^[A-Z]\w+/) { |c| puts "class"; c }
-			# Whitespace
-			token(/^(\s)/)
+			token(/^[A-Z]\w*/) { |c| puts "class"; c }
 
 			# Operators
 			# Arithmetic
@@ -32,8 +32,40 @@ class PrometheusParser
 			
 			# Misc.
 			token(/^(.)/) { |x| puts "misc"; x }
+
+			start :program do
+				match(:decl_list)
+			end
 			
-			start :exp_stat do
+			rule :decl_list do
+				match(:decl_list, :decl)
+				match(:decl) 
+			end
+
+			rule :decl do
+				match(:decl_specs, :declarator, '=', :assignment_exp, ";") { |type, declarator, _, val, _| VariableDeclarationNode.new(type, declarator, val) }
+				match(:decl_specs, :declarator, ";") { |type, declarator| puts "Type: #{type}"; VariableDeclarationNode.new(type, declarator) }
+			end
+
+			rule :decl_specs do
+				match(:type_spec)
+			end
+
+			rule :type_spec do
+				match('Void')
+				match(:classname)
+			end
+
+			rule :init_declarator do
+				match(:declarator, '=', :assignment_exp)
+				match(:declarator)
+			end
+
+			rule :declarator do
+				match(:id)
+			end
+
+			rule :exp_stat do
 				match(:exp, ';')
 				match(';')
 			end
@@ -74,7 +106,9 @@ class PrometheusParser
 			end
 
 			rule :equality_exp do
-				match(:relational_exp)
+				match(:relational_exp), :decl)
+				match(:decl) 
+
 				match(:equality_exp, '==', :relational_exp) { |a, _, b| a == b }
 				match(:equality_exp, '!=', :relational_exp) { |a, _, b| not a == b }
 			end
@@ -131,6 +165,15 @@ class PrometheusParser
 			rule :const do
 				match(ConstantNode)
 			end
+
+			rule :id do
+				match(String)
+			end
+
+			rule :classname do
+				match(/^[A-Z]\w*/)
+			end
+
 		end
 	end
 
@@ -141,7 +184,9 @@ class PrometheusParser
 			puts "Bye."
 		else
 			begin
-				puts @parser.parse(str).evaluate
+				val = @parser.parse(str)
+				puts "Parsed '#{str}' and returned #{val.inspect}"
+				puts "#{val} evaluated to #{val.evaluate}"
 				parse
 			rescue Exception => e
 				puts "Caught exception: #{e}"
@@ -149,7 +194,24 @@ class PrometheusParser
 			end
 		end
 	end
+
+	def parse_file(filename)
+		if not File.exists?(filename) then
+			puts "No such file: #{filename}"
+			return
+		end
+
+		puts "Running #{filename}..."
+		val = @parser.parse(IO.read(filename))
+		puts "Parsed '#{filename}' and returned #{val.inspect}"
+		puts "#{val} evaluated to #{val.evaluate}"
+	end
 end
 
-# Debugging
-PrometheusParser.new.parse
+parser = PrometheusParser.new
+if ARGV.length > 0 then
+	filename = ARGV[0]
+	parser.parse_file(filename)
+else
+	parser.parse
+end
