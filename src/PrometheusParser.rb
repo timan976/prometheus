@@ -38,7 +38,17 @@ class PrometheusParser
 			end
 			
 			rule :decl_list do
-				match(:decl_list, :decl)
+				match(:decl_list, :decl) do |a, b|
+					if a.is_a?(VariableDeclarationNode) and b.is_a?(VariableDeclarationNode) then
+						[a, b]
+					else
+						if a.is_a?(VariableDeclarationNode) then
+							b << a
+						else
+							a << b
+						end
+					end
+				end
 				match(:decl) 
 			end
 
@@ -201,7 +211,7 @@ class PrometheusParser
 
 		puts "Running #{filename}..."
 		val = @parser.parse(IO.read(filename))
-		puts "Parsed '#{filename}' and returned #{val.inspect}"
+		puts "Parsed '#{filename}' and returned #{val}"
 		puts "#{val} evaluated to #{val.evaluate}"
 	end
 end
