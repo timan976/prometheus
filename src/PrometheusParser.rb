@@ -106,9 +106,7 @@ class PrometheusParser
 			end
 
 			rule :equality_exp do
-				match(:relational_exp), :decl)
-				match(:decl) 
-
+				match(:relational_exp)
 				match(:equality_exp, '==', :relational_exp) { |a, _, b| a == b }
 				match(:equality_exp, '!=', :relational_exp) { |a, _, b| not a == b }
 			end
