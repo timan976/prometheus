@@ -1,5 +1,15 @@
 require './runtime.rb'
 
+class ProgramNode
+	def initialize(statements)
+		@statements = statements
+	end
+
+	def evaluate
+		@statements.each { |s| s.evaluate }
+	end
+end
+
 class ConstantNode
 	def initialize(n)
 		@n = n
@@ -7,6 +17,16 @@ class ConstantNode
 
 	def evaluate
 		@n
+	end
+end
+
+class PrintNode
+	def initialize(statement)
+		@statement = statement
+	end
+
+	def evaluate
+		pr_print @statement.evaluate
 	end
 end
 

@@ -34,7 +34,7 @@ class PrometheusParser
 			token(/^(.)/) { |x| puts "misc"; x }
 
 			start :program do
-				match(:decl_list)
+				match(:decl_list) { |stmts| ProgramNode.new(stmts) } 
 			end
 			
 			rule :decl_list do
@@ -49,7 +49,7 @@ class PrometheusParser
 						end
 					end
 				end
-				match(:decl) 
+				match(:decl) { |d| [d] }
 			end
 
 			rule :decl do

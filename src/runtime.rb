@@ -25,6 +25,12 @@ def assert_method(target, method_sig)
 	end
 end
 
+def pr_print(value)
+	if value.is_a?(ConstantNode) then
+		puts value.evaluate
+	end
+end
+
 # All classes that are prefixed with "PR" are classes that represent 
 # classes/types in Prometheus.
 
