@@ -32,7 +32,44 @@ def pr_print(value)
 end
 
 # All classes that are prefixed with "PR" are classes that represent 
-# classes/types in Prometheus.
+# objects in Prometheus.
+#
+# All classes that are prefixed with "NA" are for internal runtime
+# use only.
+
+class NAVariable
+	attr_reader :name, :rvalue
+
+	# name should be a Ruby string
+	# value should be a subclass of PRObject
+	def initialize(name, value)
+		@name, @value = name, value
+	end
+
+	def assign(val)
+		@value = val
+	end
+end
+
+class NAScopeFrame
+	attr_reader :identifier, :parent
+
+	def initialize(id, parent=nil)
+		@identifier, @parent = id, parent
+		@stack = {}
+	end
+
+	def add_variable(var)
+		@stack[var.name.to_sym] = var
+	end
+
+	def fetch_variable(var_name)
+		name = var_name.to_sym
+		return @stack[name] if @stack.has_key?(name)
+		return parent.fetch_variable(name) if parent != nil
+		raise "No such variable '#{var_name}' in current scope."
+	end
+end
 
 class PRMethodSignature
 	attr_reader :name, :return_type, :arg_types, :class_method
