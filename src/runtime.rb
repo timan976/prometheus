@@ -42,12 +42,16 @@ class NAVariable
 
 	# name should be a Ruby string
 	# value should be a subclass of PRObject
-	def initialize(name, value)
-		@name, @value = name, value
+	def initialize(name, type, value)
+		@name, @type, @value = name, type, value
 	end
 
 	def assign(val)
 		@value = val
+	end
+
+	def to_s
+		"#<#{self.class}:#{@type} #{@name} = #{@value}>"
 	end
 end
 
@@ -68,6 +72,10 @@ class NAScopeFrame
 		return @stack[name] if @stack.has_key?(name)
 		return parent.fetch_variable(name) if parent != nil
 		raise "No such variable '#{var_name}' in current scope."
+	end
+
+	def to_s
+		"#<#{self.class}:#{@stack.inspect}>"
 	end
 end
 
@@ -149,14 +157,14 @@ end
 PRNumber.add_method(PRMethodSignature.new(:add, PRNumber, false, [PRNumber]))
 
 class PRInteger < PRNumber
-	def initialize(n)
+	def initialize(n = 0)
 		call_super(self, :initialize)
 		@_value = n.to_i
 	end
 end
 
 class PRFloat < PRNumber
-	def initialize(n)
+	def initialize(n = 0)
 		call_super(self, :initialize)
 		@_value = n.to_f
 	end

@@ -1,12 +1,15 @@
 require './rdparse.rb'
 require './nodes.rb'
+require './runtime.rb'
+
+@@global_frame = NAScopeFrame.new(:global)
 
 class PrometheusParser
 	@@vars = {}
 	def initialize
 		@parser = Parser.new("prometheus") do 
 			# Parenthesis
-			token(/^(\(|\))/) { |p| puts "paren"; p }
+			token(/^(\(|\)|\}|\{)/) { |p| puts "paren"; p }
 			# String
 			token(/^(^".*"$)/) { |s| puts "string"; s }
 			# Float
@@ -34,9 +37,13 @@ class PrometheusParser
 			token(/^(.)/) { |x| puts "misc"; x }
 
 			start :program do
-				match(:decl_list) { |stmts| ProgramNode.new(stmts) } 
+				match(:compound_stat) { |stmts| ProgramNode.new(stmts) } 
 			end
-			
+
+			rule :function_definition do
+				match(:type_spec, :function_name, :param_list, :compound_stat)
+			end
+
 			rule :decl_list do
 				match(:decl_list, :decl) do |a, b|
 					if a.is_a?(VariableDeclarationNode) and b.is_a?(VariableDeclarationNode) then
@@ -75,19 +82,37 @@ class PrometheusParser
 				match(:id)
 			end
 
+			rule :stat do
+				match(:exp_stat)
+				match(:compound_stat)
+				match(:print_stat)
+			end
+
+			rule :stat_list do
+				match(:stat_list, :stat)
+				match(:stat) { |s| [s] }
+			end
+
+			rule :compound_stat do
+			 	match('{', :decl_list, :stat_list, '}') { |_, a, b, _| [CompoundStatementNode.new([].concat(a).concat(b))] }
+			 	match('{', :stat_list, '}') { |_, a, _| [CompoundStatementNode.new(a)] }
+			 	match('{', :decl_list, '}') { |_, a, _| [CompoundStatementNode.new(a)] }
+				match('{', '}')
+			end
+
 			rule :exp_stat do
 				match(:exp, ';')
 				match(';')
 			end
 
 			rule :exp do
-				match(:assignment_exp)
 				match(:exp, ',', :assignment_exp)
+				match(:assignment_exp)
 			end
 
 			rule :assignment_exp do
+				match(:unary_exp, :assignment_operator, :assignment_exp) { |a, _, b| AssignmentNode.new(a, b) }
 				match(:conditional_exp)
-				match(:unary_exp, :assignment_operator, :assignment_exp) { |a, _, b| puts "ass"; @@vars[a] = b; }
 			end
 
 			rule :assignment_operator do
@@ -159,14 +184,18 @@ class PrometheusParser
 				match(:primary_exp)
 			end
 
+			rule :param_list do
+				match(:param_list, ",", :param_decl)
+				match(:param_decl)
+			end
+
+			rule :param_decl do
+				match(:classname, :declarator)
+			end
+
 			rule :primary_exp do
 				match('(', :exp ,')') { |_, e, _| e }
-				match(String) do |id| 
-					if not @@vars.has_key?(id) then
-						raise "Undefined variable '#{id}'"
-					end
-					@@vars[id]
-				end
+				match(String)
 				match(:const)
 			end
 
@@ -182,6 +211,10 @@ class PrometheusParser
 				match(/^[A-Z]\w*/)
 			end
 
+			rule :function_name do
+				match(:id)
+			end
+
 		end
 	end
 
@@ -194,7 +227,7 @@ class PrometheusParser
 			begin
 				val = @parser.parse(str)
 				puts "Parsed '#{str}' and returned #{val.inspect}"
-				puts "#{val} evaluated to #{val.evaluate}"
+				puts "#{val} evaluated to #{val.evaluate(@@global_frame)}"
 				parse
 			rescue Exception => e
 				puts "Caught exception: #{e}"
@@ -212,7 +245,8 @@ class PrometheusParser
 		puts "Running #{filename}..."
 		val = @parser.parse(IO.read(filename))
 		puts "Parsed '#{filename}' and returned #{val}"
-		puts "#{val} evaluated to #{val.evaluate}"
+		puts "#{val} evaluated to #{val.evaluate(@@global_frame)}"
+		puts "Scope is: #{@@global_frame}"
 	end
 end
 
