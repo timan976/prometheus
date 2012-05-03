@@ -37,7 +37,18 @@ class PrometheusParser
 			token(/^(.)/) { |x| puts "misc"; x }
 
 			start :program do
-				match(:compound_stat) { |stmts| ProgramNode.new(stmts) } 
+				match(:top_level_statements) { |stmts| ProgramNode.new(stmts) } 
+			end
+
+			rule :top_level_statements do
+				match(:top_level_statements, :decl_list) do |a, b|
+					[].concat(a).concat(b)
+				end
+				match(:top_level_statements, :stat_list) do |a, b|
+					[].concat(a).concat(b)
+				end
+				match(:stat_list)
+				match(:decl_list)
 			end
 
 			rule :function_definition do
@@ -46,13 +57,13 @@ class PrometheusParser
 
 			rule :decl_list do
 				match(:decl_list, :decl) do |a, b|
-					if a.is_a?(VariableDeclarationNode) and b.is_a?(VariableDeclarationNode) then
+					if not a.is_a?(Array) and not b.is_a?(Array) then
 						[a, b]
 					else
-						if a.is_a?(VariableDeclarationNode) then
-							b << a
-						else
+						if a.is_a?(Array) then
 							a << b
+						else
+							b << a
 						end
 					end
 				end
@@ -89,7 +100,17 @@ class PrometheusParser
 			end
 
 			rule :stat_list do
-				match(:stat_list, :stat)
+				match(:stat_list, :stat) do |a, b|
+					if not a.is_a?(Array) and not b.is_a?(Array) then
+						[a, b]
+					else
+						if a.is_a?(Array) then
+							a << b
+						else
+							b << a
+						end
+					end
+				end
 				match(:stat) { |s| [s] }
 			end
 
@@ -165,7 +186,7 @@ class PrometheusParser
 				match(:mult_exp, '*', :unary_exp) { |a, _, b| ArithmeticOperatorNode.new(a, b, :*) }
 				match(:mult_exp, '/', :unary_exp) { |a, _, b| ArithmeticOperatorNode.new(a, b, :/) }
 				match(:mult_exp, '%', :unary_exp) { |a, _, b| ArithmeticOperatorNode.new(a, b, :%) }
-				match(:mult_exp, '^', :unary_exp) { |a, _, b| ArithmeticOperatorNode.new(a, b, :**) }
+				match(:mult_exp, '^', :unary_exp) { |a, _, b| ArithmeticOperatorNode.new(a, b, :^) }
 			end
 
 			rule :unary_exp do
@@ -195,7 +216,7 @@ class PrometheusParser
 
 			rule :primary_exp do
 				match('(', :exp ,')') { |_, e, _| e }
-				match(String)
+				match(String) { |name| VariableReferenceNode.new(name) }
 				match(:const)
 			end
 

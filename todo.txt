@@ -1,0 +1,16 @@
+== TODO ==
+[ ] Arithmetic
+[ ] Scoping
+[ ] Function declarations
+[ ] Function calls
+[ ] Return statements
+[ ] Method calls
+[ ] Assignment
+[ ] Unary operators
+[ ] Control statements
+[ ] Loops
+[ ] Blocks
+[ ] The method table of classes doesn't really work as expected when class B and C
+    are subclasses of class A and a method is added to class B. In the current
+	implementation, class C is also reported to implement the method, even though
+	it doesn't.

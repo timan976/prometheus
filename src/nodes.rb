@@ -41,17 +41,35 @@ end
 
 class ArithmeticOperatorNode < BinaryOperatorNode
 	# Used for syntactic sugar of certain operators
-	@@method_map = {:+ => :add, :- => :subtract, :* => :multiply, :/ => :divide}
+	@@method_map = {
+		:+ => :add, 
+		:- => :subtract,
+		:* => :multiply,
+		:/ => :divide,
+		:% => :modulus,
+		:^ => :pow
+	}
 	def evaluate(scope_frame)
-		method = @@method_map[@op]
+		method_name = @@method_map[@op]
 		target = @a.evaluate(scope_frame)
 		arg = @b.evaluate(scope_frame)
 
-		if not target.respond_to?(method) then
+		# TODO: This doesn't feel like an optimal solution
+		# since the same problem will occur in other places
+		# where method calling occurs.
+		# Perhaps we could try using method_missing
+		# on NAVariable?
+		if target.is_a?(NAVariable) then
+			target = target.value
+		end
+
+		method_signature = PRMethodSignatureForObject(target, method_name)
+
+		if not target.implements_method?(method_signature) then
 			raise "Invalid type (#{target.class}) of left operand for '#{@op}'!"
 		end
 
-		target.send(method, arg)
+		msg_send(target, method_signature, arg)
 	end
 end
 
@@ -86,20 +104,32 @@ class VariableDeclarationNode
 	def evaluate(scope_frame)
 		new_var = NAVariable.new(@name, @type, @value.evaluate(scope_frame))
 		scope_frame.add_variable(new_var)
-		puts "Declared a variable '#{@name}' of type #{@type} with the value #{@value}: #{new_var}"
+		puts "Declared a variable '#{@name}' of type #{@type} with the value #{new_var.value}: #{new_var}"
+	end
+end
+
+class VariableReferenceNode
+	def initialize(variable_name)
+		puts "Variable reference: #{variable_name.class}"
+		@variable_name = variable_name
+	end
+
+	def evaluate(scope_frame)
+		scope_frame.fetch_variable(@variable_name)
 	end
 end
 
 # Needs to be updated to support other types of
 # assignment than direct variable assignment.
 class AssignmentNode
-	def initialize(variable_name, node)
-		@variable_name, @node = variable_name, node
+	def initialize(variable_node, value_node)
+		@variable_node, @value_node = variable_node, value_node
 	end
 
 	def evaluate(scope_frame)
-		variable = scope_frame.fetch_variable(@variable_name)
-		variable.assign(@node.evaluate(scope_frame))
+		variable = @variable_node.evaluate(scope_frame)
+		value = @value_node.evaluate(scope_frame)
+		variable.assign(value)
 	end
 end
 

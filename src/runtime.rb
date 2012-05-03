@@ -38,15 +38,18 @@ end
 # use only.
 
 class NAVariable
-	attr_reader :name, :rvalue
+	attr_reader :name, :value
 
 	# name should be a Ruby string
 	# value should be a subclass of PRObject
 	def initialize(name, type, value)
-		@name, @type, @value = name, type, value
+		@name, @type= name, type
+		assign(value)
 	end
 
 	def assign(val)
+		required_class = native_class_for_string(@type)
+		assert_type(val, required_class)
 		@value = val
 	end
 
@@ -91,6 +94,7 @@ class PRMethodSignature
 	end
 
 	def eql?(other)
+		return false if other == nil
 		return false if not other.is_a?(PRMethodSignature)
 		return false if not other.name == @name
 		return false if not other.return_type == @return_type
@@ -125,10 +129,9 @@ class PRObject
 	end
 
 	def implements_method?(method_signature)
-		@@_mtable.each_value do |m|
-			return true if m.eql?(method_signature)
-		end
-		return false
+		return false if method_signature == nil
+		candidate = @@_mtable.fetch(method_signature.name.to_sym, nil)
+		return candidate.eql?(method_signature)
 	end
 
 	def self._mtable
@@ -149,19 +152,66 @@ class PRNumber < PRObject
 		new_class.new(@_value + x._value)
 	end
 
+	def subtract(x)
+		assert_type(x, PRNumber)
+
+		new_class = PRInteger
+		if x.is_a?(PRFloat) or self.is_a?(PRFloat) then
+			new_class = PRFloat
+		end
+		new_class.new(@_value - x._value)
+	end
+
+	def divide(x)
+		assert_type(x, PRNumber)
+		result = @_value / x._value
+		new_class = PRInteger
+		new_class = PRFloat if result.is_a?(Float)
+		new_class.new(result)
+	end
+
+	def multiply(x)
+		assert_type(x, PRNumber)
+
+		new_class = PRInteger
+		if x.is_a?(PRFloat) or self.is_a?(PRFloat) then
+			new_class = PRFloat
+		end
+		new_class.new(@_value * x._value)
+	end
+
+	def pow(x)
+		assert_type(x, PRNumber)
+
+		new_class = PRInteger
+		if x.is_a?(PRFloat) or self.is_a?(PRFloat) then
+			new_class = PRFloat
+		end
+		new_class.new(@_value ** x._value)
+	end
+
 	def to_s
 		"<#{self.class}:0x%08x:#{@_value}>" % self.object_id
 	end
 end
 # Expose methods on PRNumber
 PRNumber.add_method(PRMethodSignature.new(:add, PRNumber, false, [PRNumber]))
+PRNumber.add_method(PRMethodSignature.new(:subtract, PRNumber, false, [PRNumber]))
+PRNumber.add_method(PRMethodSignature.new(:divide, PRNumber, false, [PRNumber]))
+PRNumber.add_method(PRMethodSignature.new(:multiply, PRNumber, false, [PRNumber]))
+PRNumber.add_method(PRMethodSignature.new(:pow, PRNumber, false, [PRNumber]))
 
 class PRInteger < PRNumber
 	def initialize(n = 0)
 		call_super(self, :initialize)
 		@_value = n.to_i
 	end
+
+	def modulus(x)
+		PRInteger.new(@_value % x._value)
+	end
 end
+PRInteger.add_method(PRMethodSignature.new(:modulus, PRInteger, false, [PRInteger]))
 
 class PRFloat < PRNumber
 	def initialize(n = 0)
