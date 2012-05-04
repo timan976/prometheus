@@ -1,3 +1,4 @@
 Integer count = 3; 
 Integer foo = 4;
-count = (foo + 100) % 3;
+Bool bar = true;
+count = (2 + foo + 100) % 3;

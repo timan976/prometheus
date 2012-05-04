@@ -14,7 +14,7 @@ def assert_arg_types(method_signature, *args)
 	args.each_with_index do |specified_arg, i|
 		type = method_signature.arg_types[i]
 		if not specified_arg.is_a?(type) then
-			raise "Wrong type of argument #{i + 1} for #{method_signature}. Expected to be #{type}, but was #{specified_arg.type}."
+			raise "Wrong type of argument #{i + 1} for #{method_signature}. Expected to be #{type}, but was #{specified_arg.class}."
 		end
 	end
 end
@@ -29,6 +29,16 @@ def pr_print(value)
 	if value.is_a?(ConstantNode) then
 		puts value.evaluate
 	end
+end
+
+# value should be a subclass of PRObject
+def boolean_value(object)
+	return object if object.is_a?(PRBool)
+	return PRBool.new(false) if object.is_a?(PRNil)
+	if object.is_a?(PRNumber) then
+		return PRBool.new(object._value != 0)
+	end
+	return PRBool.new(true)
 end
 
 # All classes that are prefixed with "PR" are classes that represent 
@@ -217,6 +227,13 @@ class PRFloat < PRNumber
 	def initialize(n = 0)
 		call_super(self, :initialize)
 		@_value = n.to_f
+	end
+end
+
+class PRBool < PRObject
+	def initialize(tf)
+		call_super(self, :initialize)
+		@_value = tf
 	end
 end
 

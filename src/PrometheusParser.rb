@@ -16,6 +16,9 @@ class PrometheusParser
 			token(/^((?:\d+)?\.\d+)/) { |d| puts "float"; ConstantNode.new(PRFloat.new(d.to_f)) }
 			# Integer
 			token(/^(\d+)/) { |d| puts "int"; ConstantNode.new(PRInteger.new(d.to_i)) }
+			# Boolean
+			token(/^(true)/) { |b| ConstantNode.new(PRBool.new(true)) }
+			token(/^(false)/) { |b| ConstantNode.new(PRBool.new(false)) }
 			# Whitespace
 			token(/^(\s)/)
 			# Variable/function name

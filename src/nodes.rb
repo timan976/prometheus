@@ -51,17 +51,8 @@ class ArithmeticOperatorNode < BinaryOperatorNode
 	}
 	def evaluate(scope_frame)
 		method_name = @@method_map[@op]
-		target = @a.evaluate(scope_frame)
-		arg = @b.evaluate(scope_frame)
-
-		# TODO: This doesn't feel like an optimal solution
-		# since the same problem will occur in other places
-		# where method calling occurs.
-		# Perhaps we could try using method_missing
-		# on NAVariable?
-		if target.is_a?(NAVariable) then
-			target = target.value
-		end
+		target = object_value(@a, scope_frame)
+		arg = object_value(@b, scope_frame)
 
 		method_signature = PRMethodSignatureForObject(target, method_name)
 
