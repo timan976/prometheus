@@ -1,4 +1,11 @@
 Integer count = 3; 
-Integer foo = 4;
-Bool bar = true;
-count = (2 + foo + 100) % 3;
+Integer foo = ++4;
+Integer six = ++foo;
+Integer six2 = foo--;
+Bool bar = true == false;
+bar = !(true || false && true);
+bar = !!!!!!!!5--;
+bar = true != false;
+bar = !--1;
+bar = !(foo >= 4);
+count = (++foo + 100) % 3;

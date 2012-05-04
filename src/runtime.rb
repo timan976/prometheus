@@ -138,6 +138,10 @@ class PRObject
 		puts "#{self.class} init"
 	end
 
+	def compare(other_object)
+		return PRInteger.new(0)
+	end
+
 	def implements_method?(method_signature)
 		return false if method_signature == nil
 		candidate = @@_mtable.fetch(method_signature.name.to_sym, nil)
@@ -149,6 +153,9 @@ class PRObject
 	end
 end
 PRObject.add_method(PRMethodSignature.new(:init, PRObject, false))
+
+class PRNil < PRObject
+end
 
 class PRNumber < PRObject
 	attr_accessor :_value
@@ -200,6 +207,11 @@ class PRNumber < PRObject
 		new_class.new(@_value ** x._value)
 	end
 
+	def compare(other_object)
+		assert_type(other_object, PRNumber)
+		PRInteger.new(@_value <=> other_object._value)
+	end
+
 	def to_s
 		"<#{self.class}:0x%08x:#{@_value}>" % self.object_id
 	end
@@ -222,6 +234,9 @@ class PRInteger < PRNumber
 	end
 end
 PRInteger.add_method(PRMethodSignature.new(:modulus, PRInteger, false, [PRInteger]))
+# This needs to be added here since PRInteger isn't defined yet if we put it below
+# the definition of PRObject
+PRObject.add_method(PRMethodSignature.new(:compare, PRInteger, false, [PRObject]))
 
 class PRFloat < PRNumber
 	def initialize(n = 0)
@@ -231,9 +246,14 @@ class PRFloat < PRNumber
 end
 
 class PRBool < PRObject
+	attr_accessor :_value
 	def initialize(tf)
 		call_super(self, :initialize)
 		@_value = tf
+	end
+
+	def to_s
+		"<#{self.class}:0x%08x:#{@_value}>" % self.object_id
 	end
 end
 

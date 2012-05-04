@@ -21,20 +21,23 @@ class PrometheusParser
 			token(/^(false)/) { |b| ConstantNode.new(PRBool.new(false)) }
 			# Whitespace
 			token(/^(\s)/)
-			# Variable/function name
-			token(/(^[^\d][a-zA-Z_]+)/) { |w| puts "var"; w }
-			# Classname
-			token(/^[A-Z]\w*/) { |c| puts "class"; c }
 
 			# Operators
+			# Unary
+			token(/^((\+\+)|(--))/) { |op| puts "unary"; op }
 			# Arithmetic
 			token(/^([+]|-|[*]|\/)/) { |a| puts "arith"; a }
 			# Comparison
-			token(/^(==|!=)/) { |c| puts "comp"; c }
+			token(/^(==|!=|\<=|\>=|\<|\>)/) { |c| puts "comp"; c }
 			# Assignment
 			token(/^(\*=|\/=|%=|\+=|-=|=)/) { |op| puts "op"; op }
 			# Logic
-			token(/^(\|\||\?|:|&&)/) { |op| puts "logic"; op }
+			token(/^(\|\||\?|:|&&|!)/) { |op| puts "logic"; op }
+			
+			# Variable/function name
+			token(/(^[^\d][a-zA-Z_0-9]+)/) { |w| puts "var"; w }
+			# Classname
+			token(/^[A-Z]\w*/) { |c| puts "class"; c }
 			
 			# Misc.
 			token(/^(.)/) { |x| puts "misc"; x }
@@ -140,8 +143,8 @@ class PrometheusParser
 			end
 
 			rule :assignment_operator do
-				#match("=")
-				match(/=|\*=|\/=|%=|\+=|-=/)
+				match("=")
+				#match(/=|\*=|\/=|%=|\+=|-=/)
 			end
 
 			rule :conditional_exp do
@@ -156,26 +159,26 @@ class PrometheusParser
 
 			rule :logical_or_exp do
 				match(:logical_and_exp)
-				match(:logical_or_exp, '||', :logical_and_exp)
+				match(:logical_or_exp, '||', :logical_and_exp) { |a, _, b| LogicalORNode.new(a, b) }
 			end
 
 			rule :logical_and_exp do
 				match(:equality_exp)
-				match(:logical_and_exp, '&&', :equality_exp) { |a, _, b| a and b }
+				match(:logical_and_exp, '&&', :equality_exp) { |a, _, b| LogicalANDNode.new(a, b) }
 			end
 
 			rule :equality_exp do
 				match(:relational_exp)
-				match(:equality_exp, '==', :relational_exp) { |a, _, b| a == b }
-				match(:equality_exp, '!=', :relational_exp) { |a, _, b| not a == b }
+				match(:equality_exp, '==', :relational_exp) { |a, _, b| EqualityNode.new(a, b) }
+				match(:equality_exp, '!=', :relational_exp) { |a, _, b| LogicalNOTNode.new(EqualityNode.new(a, b)) }
 			end
 
 			rule :relational_exp do
 				match(:additive_exp)
-				match(:relational_exp, '<', :additive_exp)
-				match(:relational_exp, '>', :additive_exp)
-				match(:relational_exp, '<=', :additive_exp)
-				match(:relational_exp, '>=', :additive_exp)
+				match(:relational_exp, '<', :additive_exp) { |a, op, b| ComparisonNode.new(a, op, b) }
+				match(:relational_exp, '>', :additive_exp) { |a, op, b| ComparisonNode.new(a, op, b) }
+				match(:relational_exp, '<=', :additive_exp) { |a, op, b| ComparisonNode.new(a, op, b) }
+				match(:relational_exp, '>=', :additive_exp) { |a, op, b| ComparisonNode.new(a, op, b) }
 			end
 
 			rule :additive_exp do
@@ -193,8 +196,9 @@ class PrometheusParser
 			end
 
 			rule :unary_exp do
-				match('++', :unary_exp)
-				match('--', :unary_exp)
+				match('++', :unary_exp) { |_, a| UnaryPreIncrementNode.new(a) }
+				match('--', :unary_exp) { |_, a| UnaryPreDecrementNode.new(a) }
+				match('!', :unary_exp) { |_, a| LogicalNOTNode.new(a) }
 				#match(:unary_operator, :unary_exp)
 				match('-', :unary_exp) { |_, a| -a }
 				match(:postfix_exp)
@@ -205,6 +209,8 @@ class PrometheusParser
 			end
 
 			rule :postfix_exp do
+				match(:postfix_exp, '++') { |a, _| UnaryPostIncrementNode.new(a) }
+				match(:postfix_exp, '--') { |a, _| UnaryPostDecrementNode.new(a) }
 				match(:primary_exp)
 			end
 

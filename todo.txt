@@ -1,7 +1,7 @@
 == TODO ==
-[ ] Arithmetic
+[x] Arithmetic
 [ ] Scoping
-[ ] Boolean values
+[x] Boolean values
 [ ] nil values
 [ ] Void
 [ ] Function declarations
@@ -10,6 +10,7 @@
 [ ] Method calls
 [ ] Assignment
 [ ] Unary operators
+[x] Logical operators
 [ ] Control statements
 [ ] Loops
 [ ] Blocks
