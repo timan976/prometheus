@@ -360,8 +360,12 @@ class PrometheusParser
 
 		puts "Running #{filename}..."
 			@parser.logger.level = Logger::WARN
-			val = @parser.parse(IO.read(filename))
-			val.evaluate(@@global_frame) if val != nil
+			begin
+				val = @parser.parse(IO.read(filename))
+				val.evaluate(@@global_frame) if val != nil
+			rescue Exception => e
+				puts "An error occured: #{e}"
+			end
 		#puts "Scope is: #{@@global_frame}"
 	end
 end
