@@ -1,21 +1,26 @@
 == TODO ==
 [x] Arithmetic
-[ ] Scoping
+[x] Scoping
 [x] Boolean values
+[x] Strings
+[x] Arrays
+[x] Dicts
+[x] Print
 [ ] nil values
 [ ] Void
-[ ] Function declarations
-[ ] Function calls
+[x] Function declarations
+[x] Function calls
 [ ] Return statements
-[ ] Method calls
-[ ] Assignment
-[ ] Unary operators
+[x] Method calls
+[x] Assignment
+[x] Unary operators
 [x] Logical operators
-[ ] Control statements
-[ ] Loops
+[x] Control statements
+[x] Loops
 [ ] Blocks
 [ ] The method table of classes doesn't really work as expected when class B and C
     are subclasses of class A and a method is added to class B. In the current
 	implementation, class C is also reported to implement the method, even though
 	it doesn't.
 [ ] Make sure recursion works
+[ ] Subscript

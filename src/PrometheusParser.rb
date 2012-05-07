@@ -8,14 +8,18 @@ class PrometheusParser
 	@@vars = {}
 	def initialize
 		@parser = Parser.new("prometheus") do 
+			# Comments
+			token(/^(\/\/.*)/)
+			# Separators
+			token(/^\;/) { |s| s }
 			# Parenthesis
-			token(/^(\(|\)|\}|\{)/) { |p| puts "paren"; p }
+			token(/^(\(|\)|\}|\{)/) { |p| p }
 			# String
-			token(/^(^".*"$)/) { |s| puts "string"; s }
+			token(/^("[^"]*")/) { |s| ConstantNode.new(PRString.new(s[1,s.length - 2])) }
 			# Float
-			token(/^((?:\d+)?\.\d+)/) { |d| puts "float"; ConstantNode.new(PRFloat.new(d.to_f)) }
+			token(/^((?:\d+)?\.\d+)/) { |d| ConstantNode.new(PRFloat.new(d.to_f)) }
 			# Integer
-			token(/^(\d+)/) { |d| puts "int"; ConstantNode.new(PRInteger.new(d.to_i)) }
+			token(/^(\d+)/) { |d| ConstantNode.new(PRInteger.new(d.to_i)) }
 			# Boolean
 			token(/^(true)/) { |b| ConstantNode.new(PRBool.new(true)) }
 			token(/^(false)/) { |b| ConstantNode.new(PRBool.new(false)) }
@@ -24,23 +28,25 @@ class PrometheusParser
 
 			# Operators
 			# Unary
-			token(/^((\+\+)|(--))/) { |op| puts "unary"; op }
+			token(/^((\+\+)|(--))/) { |op| op }
 			# Arithmetic
-			token(/^([+]|-|[*]|\/)/) { |a| puts "arith"; a }
+			token(/^([+]|-|[*]|\/)/) { |a| a }
 			# Comparison
-			token(/^(==|!=|\<=|\>=|\<|\>)/) { |c| puts "comp"; c }
+			token(/^(==|!=|\<=|\>=|\<|\>)/) { |c| c }
 			# Assignment
-			token(/^(\*=|\/=|%=|\+=|-=|=)/) { |op| puts "op"; op }
+			token(/^(\*=|\/=|%=|\+=|-=|=)/) { |op| op }
 			# Logic
-			token(/^(\|\||\?|:|&&|!)/) { |op| puts "logic"; op }
+			token(/^(\|\||\?|:|&&|!)/) { |op| op }
+			# Dot-syntax
+			token(/^\./) { |d| d }
 			
 			# Variable/function name
-			token(/(^[^\d][a-zA-Z_0-9]+)/) { |w| puts "var"; w }
+			token(/(^[^\d][a-zA-Z_0-9]+)/) { |w| w }
 			# Classname
-			token(/^[A-Z]\w*/) { |c| puts "class"; c }
+			token(/^[A-Z]\w*/) { |c| c }
 			
 			# Misc.
-			token(/^(.)/) { |x| puts "misc"; x }
+			token(/^(.)/) { |x| x }
 
 			start :program do
 				match(:top_level_statements) { |stmts| ProgramNode.new(stmts) } 
@@ -53,12 +59,18 @@ class PrometheusParser
 				match(:top_level_statements, :stat_list) do |a, b|
 					[].concat(a).concat(b)
 				end
+				match(:top_level_statements, :function_definition) do |a, b|
+					a << b
+				end
+				match(:function_definition)
 				match(:stat_list)
 				match(:decl_list)
 			end
 
 			rule :function_definition do
-				match(:type_spec, :function_name, :param_list, :compound_stat)
+				match(:type_spec, :function_name, '(', :param_list, ')', :compound_stat) do |t, name, _, params, _, body|
+					[FunctionDeclarationNode.new(t, name, params, body)]
+				end
 			end
 
 			rule :decl_list do
@@ -102,6 +114,9 @@ class PrometheusParser
 			rule :stat do
 				match(:exp_stat)
 				match(:compound_stat)
+				match(:selection_stat)
+				match(:iteration_stat)
+				match(:jump_stat)
 				match(:print_stat)
 			end
 
@@ -120,11 +135,53 @@ class PrometheusParser
 				match(:stat) { |s| [s] }
 			end
 
+			rule :selection_stat do
+				match('if', '(', :exp, ')', :stat, 'else', :stat) { |_, _, cond, _, stat, _, stat2| IfElseStatementNode.new(cond, stat, stat2) }
+				match('if', '(', :exp, ')', :stat) { |_, _, cond, _, stat| IfStatementNode.new(cond, stat) }
+			end
+
+			rule :iteration_stat do
+				match('while', '(', :exp, ')', :stat) { |_, _, condition, _, stat| WhileLoopNode.new(condition, stat) }
+				match('for', '(', :exp, ';', :exp, ';', :exp, ')', :stat) do |_, _, decl, _, cond, _, control, _, stat|
+					ForLoopNode.new(decl, cond, control, stat)
+				end
+				match('for', '(', :exp, ';', :exp, ';', ')', :stat) do |_, _, decl, _, cond, _, _, stat|
+					ForLoopNode.new(decl, cond, nil, stat)
+				end
+				match('for', '(', :exp, ';', ';', :exp, ')', :stat) do |_, _, decl, _, _, control, _, stat|
+					ForLoopNode.new(decl, nil, control, stat)
+				end
+				match('for', '(', :exp, ';', ';', ')', :stat) do |_, _, decl, _, _, _, stat|
+					ForLoopNode.new(decl, nil, nil, stat)
+				end
+				match('for', '(', ';', :exp, ';', :exp, ')', :stat) do |_, _, _, cond, _, control, _, stat|
+					ForLoopNode.new(nil, cond, control, stat)
+				end
+				match('for', '(', ';', :exp, ';', ')', :stat) do |_, _, _, cond, _, _, stat|
+					ForLoopNode.new(nil, cond, nil, stat)
+				end
+				match('for', '(', ';', ';', :exp, ')', :stat) do |_, _, _, _, control, _, stat|
+					ForLoopNode.new(nil, nil, control, stat)
+				end
+				match('for', '(', ';', ';', ')', :stat) do |_, _, _, _, _, stat|
+					ForLoopNode.new(nil, nil, nil, stat)
+				end
+			end
+
 			rule :compound_stat do
-			 	match('{', :decl_list, :stat_list, '}') { |_, a, b, _| [CompoundStatementNode.new([].concat(a).concat(b))] }
-			 	match('{', :stat_list, '}') { |_, a, _| [CompoundStatementNode.new(a)] }
-			 	match('{', :decl_list, '}') { |_, a, _| [CompoundStatementNode.new(a)] }
-				match('{', '}')
+			 	match('{', :decl_list, :stat_list, '}') { |_, a, b, _| CompoundStatementNode.new([].concat(a).concat(b)) }
+			 	match('{', :stat_list, '}') { |_, a, _| CompoundStatementNode.new(a) }
+			 	match('{', :decl_list, '}') { |_, a, _| CompoundStatementNode.new(a) }
+				match('{', '}') { |_, _| CompoundStatementNode.new() }
+			end
+			
+			rule :jump_stat do
+				match('return', :exp, ';') { |_, exp, _| ReturnStatementNode.new(exp) }
+				match('return', ';') { |_, _| ReturnStatementNode.new() }
+			end
+
+			rule :print_stat do
+				match('print', :exp_stat) { |_, stat| PrintNode.new(stat) }
 			end
 
 			rule :exp_stat do
@@ -211,22 +268,51 @@ class PrometheusParser
 			rule :postfix_exp do
 				match(:postfix_exp, '++') { |a, _| UnaryPostIncrementNode.new(a) }
 				match(:postfix_exp, '--') { |a, _| UnaryPostDecrementNode.new(a) }
+				match(:postfix_exp, '(', :argument_exp_list, ')') { |target, _, args, _| FunctionCallNode.new(target, args) }
+				match(:postfix_exp, '(', ')') { |target, _, _| FunctionCallNode.new(target) }
+				match(:postfix_exp, '.', :id) { |target, _, name| MethodLookupNode.new(target, name) }
 				match(:primary_exp)
 			end
 
+			rule :argument_exp_list do
+				match(:argument_exp_list, ',', :conditional_exp) do |a, _, b|
+					if not a.is_a?(Array) and not b.is_a?(Array) then
+						[a, b]
+					else
+						if a.is_a?(Array) then
+							a << b
+						else
+							b << a
+						end
+					end
+				end
+				match(:conditional_exp) { |e| [e] }
+			end
+
 			rule :param_list do
-				match(:param_list, ",", :param_decl)
-				match(:param_decl)
+				match(:param_list, ",", :param_decl) { |list, _, p| list << p }
+				match(:param_decl) { |p| [p] }
 			end
 
 			rule :param_decl do
-				match(:classname, :declarator)
+				match(:classname, :id) { |type, name| ParameterDeclarationNode.new(type, name) }
 			end
 
 			rule :primary_exp do
 				match('(', :exp ,')') { |_, e, _| e }
-				match(String) { |name| VariableReferenceNode.new(name) }
+				match('@', '[', :key_value_list, ']') { |_, _, pairs, _| DictLiteralNode.new(pairs) }
+				match('[', :argument_exp_list, ']') { |_, elements, _| ArrayLiteralNode.new(elements) }
+				match(String) { |name| ScopeLookupNode.new(name) }
 				match(:const)
+			end
+
+			rule :key_value_exp do
+				match(:assignment_exp, ':', :assignment_exp) { |key, _, value| KeyValuePairNode.new(key, value) }
+			end
+
+			rule :key_value_list do
+				match(:key_value_list, ',', :key_value_exp) { |list, _, p| list << p }
+				match(:key_value_exp) { |p| [p] }
 			end
 
 			rule :const do
@@ -273,10 +359,10 @@ class PrometheusParser
 		end
 
 		puts "Running #{filename}..."
-		val = @parser.parse(IO.read(filename))
-		puts "Parsed '#{filename}' and returned #{val}"
-		puts "#{val} evaluated to #{val.evaluate(@@global_frame)}"
-		puts "Scope is: #{@@global_frame}"
+			@parser.logger.level = Logger::WARN
+			val = @parser.parse(IO.read(filename))
+			val.evaluate(@@global_frame) if val != nil
+		#puts "Scope is: #{@@global_frame}"
 	end
 end
 

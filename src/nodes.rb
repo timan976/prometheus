@@ -26,7 +26,7 @@ class PrintNode
 	end
 
 	def evaluate(scope_frame)
-		pr_print @statement.evaluate(scope_frame)
+		pr_print(object_value(@statement, scope_frame), scope_frame)
 	end
 end
 
@@ -97,7 +97,6 @@ class LogicalNOTNode
 
 	def evaluate(scope_frame)
 		value = boolean_value(object_value(@operand, scope_frame))
-		puts "Logical not: #{value}"
 		result = value._value == false
 		PRBool.new(result)
 	end
@@ -111,7 +110,7 @@ class EqualityNode
 	def evaluate(scope_frame)
 		left_value = object_value(@left_operand, scope_frame)
 		right_value = object_value(@right_operand, scope_frame)
-		PRBool.new(left_value == right_value)
+		return left_value.eql(right_value)
 	end
 end
 
@@ -237,18 +236,33 @@ class UnaryOperatorNode
 end
 
 class MethodCallNode
-	def initialize(target, method, *args)
-		@target, @method, @args = target, method, args
+	def initialize(target, method_name, *args)
+		@target, @method_name, @args = target, method_name, args
 	end
 
 	def evaluate(scope_frame)
-		assert_method(@target, @method)
+		assert_method(@target, @method_name)
+	end
+end
+
+class FunctionCallNode
+	def initialize(target, args=[])
+		@target, @args = target, args
+	end
+
+	def evaluate(scope_frame)
+		arg_values = []
+		@args.each { |arg_node| arg_values << object_value(arg_node, scope_frame) }
+		function = object_value(@target, scope_frame)
+		#puts "Calling function #{function} with arguments #{arg_values}"
+		result = function.call(arg_values, scope_frame)
+		return result
 	end
 end
 
 class VariableDeclarationNode
 	def initialize(type, name, value=nil)
-		puts "Variable declaration: #{name} = #{value}"
+		#puts "Variable declaration: #{name} = #{value}"
 		@type, @name, @value = type, name, value
 		if @value == nil then
 			@value = ConstantNode.new(native_class_for_string(type).new)
@@ -257,24 +271,77 @@ class VariableDeclarationNode
 
 	def evaluate(scope_frame)
 		new_var = NAVariable.new(@name, @type, @value.evaluate(scope_frame))
-		scope_frame.add_variable(new_var)
-		puts "Declared a variable '#{@name}' of type #{@type} with the value #{new_var.value}: #{new_var}"
+		scope_frame.add(new_var)
+		#puts "Declared a variable '#{@name}' of type #{@type} with the value #{new_var.value}: #{new_var}"
 	end
 end
 
-class VariableReferenceNode
+class FunctionDeclarationNode
+	def initialize(type, name, parameters, body)
+		@type, @name, @parameter_nodes, @body = type, name, parameters, body
+	end
+
+	def evaluate(scope_frame)
+		native_type = native_class_for_string(@type)
+		params = []
+		@parameter_nodes.each { |node| params << node.evaluate(scope_frame) }
+
+		function = NAFunction.new(@name, native_type, params, @body)
+		assert_return(function)
+
+		#puts "Declared a function: #{function.body}"
+		scope_frame.add(function)
+	end
+end
+
+class ParameterDeclarationNode
+	def initialize(type, name)
+		@type, @name = type, name
+	end
+
+	def evaluate(scope_frame)
+		return NAParameter.new(native_class_for_string(@type), @name)
+	end
+end
+
+class ReturnStatementNode
+	attr_reader :statement
+
+	def initialize(statement = nil)
+		@statement = statement
+	end
+
+	def evaluate(scope_frame)
+		@statement.evaluate(scope_frame) if @statement != nil
+	end
+end
+
+class ScopeLookupNode
 	def initialize(variable_name)
-		puts "Variable reference: #{variable_name.class}"
+		#puts "Variable reference: #{variable_name.class}"
 		@variable_name = variable_name
 	end
 
 	def evaluate(scope_frame)
-		scope_frame.fetch_variable(@variable_name)
+		scope_frame.fetch(@variable_name)
+	end
+end
+
+class MethodLookupNode
+	def initialize(receiver, method_name)
+		@receiver_node, @method_name = receiver, method_name
+	end
+
+	def evaluate(scope_frame)
+		receiver_object = object_value(@receiver_node, scope_frame)
+		signature = PRMethodSignatureForObject(receiver_object, @method_name)
+		return NAMethodInvocation.new(receiver_object, signature) if signature != nil
+		raise "No function '#{@method_name}' found for object #{receiver_object}"
 	end
 end
 
 # Needs to be updated to support other types of
-# assignment than direct variable assignment.
+# assignment than direct variable assignment (such as subscript assignment).
 class AssignmentNode
 	def initialize(variable_node, value_node)
 		@variable_node, @value_node = variable_node, value_node
@@ -288,11 +355,105 @@ class AssignmentNode
 end
 
 class CompoundStatementNode
-	def initialize(statements)
+	attr_reader :statements
+	def initialize(statements = nil)
 		@statements = statements
 	end
 
 	def evaluate(scope_frame)
+		return if @statements == nil
 		@statements.each { |s| s.evaluate(scope_frame) }
+	end
+end
+
+class ArrayLiteralNode
+	def initialize(element_nodes)
+		@element_nodes = element_nodes
+	end
+
+	def evaluate(scope_frame)
+		elements = @element_nodes.map { |e| object_value(e, scope_frame) }
+		return PRArray.new(elements)
+	end
+end
+
+class DictLiteralNode
+	def initialize(pair_nodes)
+		@pair_nodes = pair_nodes
+	end
+
+	def evaluate(scope_frame)
+		pairs = @pair_nodes.map { |p| object_value(p, scope_frame) }
+		return PRDict.new(pairs)
+	end
+end
+
+class KeyValuePairNode
+	def initialize(key, value)
+		@key, @value = key, value
+	end
+
+	def evaluate(scope_frame)
+		key_object = object_value(@key, scope_frame)
+		value_object = object_value(@value, scope_frame)
+		return NAKeyValuePair.new(key_object, value_object)
+	end
+end
+
+class IfStatementNode
+	def initialize(condition, stat)
+		@condition, @stat = condition, stat
+	end
+
+	def evaluate(scope_frame)
+		new_scope = NAScopeFrame.new("if", scope_frame)
+		value = boolean_value(object_value(@condition, new_scope))
+		if value._value then
+			@stat.evaluate(new_scope)
+		end
+	end
+end
+
+class IfElseStatementNode
+	def initialize(condition, stat, else_stat)
+		@condition, @stat, @else_stat = condition, stat, else_stat
+	end
+
+	def evaluate(scope_frame)
+		new_scope = NAScopeFrame.new("if", scope_frame)
+		value = boolean_value(object_value(@condition, new_scope))
+		if value._value then
+			@stat.evaluate(new_scope)
+		else
+			@else_stat.evaluate(new_scope)
+		end
+	end
+end
+
+class WhileLoopNode
+	def initialize(condition, stat)
+		@condition, @stat = condition, stat
+	end
+
+	def evaluate(scope_frame)
+		new_scope = NAScopeFrame.new("while", scope_frame)
+		while boolean_value(object_value(@condition, new_scope))._value do
+			@stat.evaluate(new_scope)
+		end
+	end
+end
+
+class ForLoopNode
+	def initialize(decl, cond, control, stat)
+		@declaration, @condition, @control, @stat = decl, cond, control, stat
+	end
+
+	def evaluate(scope_frame)
+		new_scope = NAScopeFrame.new("for", scope_frame)
+		@declaration.evaluate(new_scope) if @declaration != nil
+		while @condition == nil or boolean_value(object_value(@condition, new_scope))._value do
+			@stat.evaluate(new_scope) if @stat != nil
+			@control.evaluate(new_scope) if @control != nil
+		end
 	end
 end

@@ -1,11 +1,12 @@
 #require './runtime.rb'
 
 def PRMethodSignatureForObject(target, method_name)
-	return nil if not target.class._mtable.has_key?(method_name)
-	target.class._mtable[method_name]
+	return nil if not target.class._mtable.has_key?(method_name.to_sym)
+	target.class._mtable[method_name.to_sym]
 end
 
 def native_class_for_string(class_name)
+	return class_name if not class_name.is_a?(String)
 	Kernel.const_get("PR" + class_name)
 end
 

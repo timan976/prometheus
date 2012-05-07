@@ -19,16 +19,63 @@ def assert_arg_types(method_signature, *args)
 	end
 end
 
+def assert_function_arg_types(function, *args)
+	if function.parameters.length != args.length then
+		raise "Wrong number of arguments for #{function}. #{args.length} arguments specified, #{function.parameters.length} required."
+	end
+
+	args.each_with_index do |argument, i|
+		param = function.parameters[i]
+		if not argument.is_a?(param.type) then
+			raise "Wrong type of argument #{i + 1} for #{function}. Expected to be #{param.type}, but was #{argument.class}."
+		end
+	end
+end
+
+def assert_return(function)
+	has_return = false
+	function.body.statements.each do |statement|
+		if statement.is_a?(ReturnStatementNode) then
+			has_return = true
+			break
+		end
+	end
+
+	if function.return_type == PRVoid then
+		if has_return then
+			raise "Function '#{function.name}' is declared Void but contains a return statement."
+		end
+	else
+		if not has_return then
+			raise "Function '#{function.name}' is declared #{function.return_type} but doesn't contain a return statement."
+		end
+	end
+end
+
 def assert_method(target, method_sig)
 	if not target.implements_method?(method_sig) then
 		raise "Object of class '#{target.class}' does not implement #{method_sig}."
 	end
 end
 
-def pr_print(value)
-	if value.is_a?(ConstantNode) then
-		puts value.evaluate
+def pr_print(value, scope_frame)
+	if value.is_a?(PRString) then
+		pr_print_string(value, scope_frame)
+	else
+		method_signature = PRMethodSignatureForObject(value, :description)
+		str = msg_send(value, method_signature)
+		pr_print_string(str, scope_frame)
 	end
+end
+
+def pr_print_string(string, scope_frame)
+	result = string._value.gsub(/<[A-Za-z_0-9]+>/) do |var_name| 
+		var_name = var_name[1, var_name.length - 2]
+		value = scope_frame.fetch(var_name.to_sym).value
+		method_signature = PRMethodSignatureForObject(value, :description)
+		msg_send(value, method_signature)._value
+	end
+	puts result
 end
 
 # value should be a subclass of PRObject
@@ -76,19 +123,73 @@ class NAScopeFrame
 		@stack = {}
 	end
 
-	def add_variable(var)
+	def add(var)
+		name = var.name.to_sym
+		if (existing_variable = @stack.fetch(name, nil)) != nil then
+			raise "Trying to re-declare variable '#{existing_variable.name}' already declared in current scope."
+		else
+			if @stack.has_key?(name) then
+				shadowed_var = @stack[name]
+				puts "Warning: Declaring '#{var.type} #{var.name}' will shadow previously defined '#{shadowed_var.type} #{shadowed_var.name}'."
+			end
+		end
 		@stack[var.name.to_sym] = var
 	end
 
-	def fetch_variable(var_name)
+	def fetch(var_name)
 		name = var_name.to_sym
 		return @stack[name] if @stack.has_key?(name)
-		return parent.fetch_variable(name) if parent != nil
+		return parent.fetch(name) if parent != nil
 		raise "No such variable '#{var_name}' in current scope."
+	end
+
+	def root_scope
+		return self if @parent == nil
+		return @parent.root_scope
 	end
 
 	def to_s
 		"#<#{self.class}:#{@stack.inspect}>"
+	end
+end
+
+class NAMethodInvocation
+	attr_reader :receiver, :method_signature
+	def initialize(receiver, method_signature)
+		@receiver, @method_signature = receiver, method_signature
+	end
+
+	def call(arguments, scope=nil)
+		return msg_send(@receiver, @method_signature, *arguments)
+	end
+end
+
+class NAParameter
+	attr_reader :type, :name
+
+	def initialize(type, name)
+		@type, @name = type, name
+	end
+end
+
+class NAFunction
+	attr_reader :name, :return_type, :parameters, :body
+
+	def initialize(name, return_type, param_declarations, body)
+		@name, @return_type, @parameters, @body = name, return_type, param_declarations, body
+	end
+
+	def call(arguments, scope_frame)
+		assert_function_arg_types(self, *arguments)
+
+		# Create a new scope with the passed in arguments
+		function_scope = NAScopeFrame.new(@name, scope_frame.root_scope)
+		@parameters.each_with_index do |param, i|
+			arg = NAVariable.new(param.name, param.type, arguments[i])
+			function_scope.add(arg)
+		end
+
+		return @body.evaluate(function_scope)
 	end
 end
 
@@ -142,17 +243,27 @@ class PRObject
 		return PRInteger.new(0)
 	end
 
+	def eql(other_object)
+		return PRBool.new(false)
+	end
+
 	def implements_method?(method_signature)
 		return false if method_signature == nil
 		candidate = @@_mtable.fetch(method_signature.name.to_sym, nil)
 		return candidate.eql?(method_signature)
 	end
 
+	def description
+		return PRString.new(self.inspect)
+	end
+
 	def self._mtable
 		@@_mtable
 	end
 end
-PRObject.add_method(PRMethodSignature.new(:init, PRObject, false))
+
+class PRVoid
+end
 
 class PRNil < PRObject
 end
@@ -212,16 +323,20 @@ class PRNumber < PRObject
 		PRInteger.new(@_value <=> other_object._value)
 	end
 
+	def eql(other_object)
+		return PRBool.new(false) if not other_object.is_a?(PRNumber)
+		return PRBool.new(@_value == other_object._value)
+	end
+
 	def to_s
 		"<#{self.class}:0x%08x:#{@_value}>" % self.object_id
 	end
+
+	def description
+		return PRString.new(@_value.to_s)
+	end
 end
 # Expose methods on PRNumber
-PRNumber.add_method(PRMethodSignature.new(:add, PRNumber, false, [PRNumber]))
-PRNumber.add_method(PRMethodSignature.new(:subtract, PRNumber, false, [PRNumber]))
-PRNumber.add_method(PRMethodSignature.new(:divide, PRNumber, false, [PRNumber]))
-PRNumber.add_method(PRMethodSignature.new(:multiply, PRNumber, false, [PRNumber]))
-PRNumber.add_method(PRMethodSignature.new(:pow, PRNumber, false, [PRNumber]))
 
 class PRInteger < PRNumber
 	def initialize(n = 0)
@@ -233,10 +348,8 @@ class PRInteger < PRNumber
 		PRInteger.new(@_value % x._value)
 	end
 end
-PRInteger.add_method(PRMethodSignature.new(:modulus, PRInteger, false, [PRInteger]))
 # This needs to be added here since PRInteger isn't defined yet if we put it below
 # the definition of PRObject
-PRObject.add_method(PRMethodSignature.new(:compare, PRInteger, false, [PRObject]))
 
 class PRFloat < PRNumber
 	def initialize(n = 0)
@@ -255,6 +368,173 @@ class PRBool < PRObject
 	def to_s
 		"<#{self.class}:0x%08x:#{@_value}>" % self.object_id
 	end
+
+	def description
+		return PRString.new(@_value.to_s)
+	end
+
+	def eql(other_object)
+		return PRBool.new(false) if not other_object.is_a?(PRBool)
+		return PRBool.new(@_value == other_object._value)
+	end
+end
+
+class PRString < PRObject
+	attr_reader :_value
+	def initialize(str)
+		@_value = str
+	end
+
+	def append(str)
+		return PRString.new(@_value + str._value)
+	end
+
+	def length
+		return PRInteger.new(@_value.length)
+	end
+
+	def at(i)
+		index = i._value
+		if index < 0 || index >= @_value.length then
+			raise "Character index #{index} out of bounds for '#{@_value}' of length #{@_value.length}."
+		end
+
+		return PRString.new(@_value[index])
+	end
+
+	def substr(start, n)
+		index = start._value
+		if index < 0 || index >= @_value.length then
+			raise "Start index #{index} for subrange is out of bounds for '#{@_value}' of length #{@_value.length}."
+		end
+
+		if n._value < 0 || (n._value + index) > @_value.length then
+			raise "Character count #{n._value} for subrange with start at index #{index} is too large for '#{@_value}' of length #{@_value.length}."
+		end
+
+		return PRString.new(@_value[index, index + n._value])
+	end
+
+	def to_s
+		"<#{self.class}:0x%08x:#{@_value}>" % self.object_id
+	end
+
+	def description
+		return self
+	end
+
+	def eql(other_object)
+		return PRBool.new(false) if not other_object.is_a?(PRString)
+		return PRBool.new(@_value == other_object._value)
+	end
+end
+
+class PRArray < PRObject
+	attr_reader :_elements
+
+	def initialize(elements)
+		@_elements = elements
+	end
+
+	def at(i)
+		index = i._value
+		if index < 0 || index >= @_elements.length then
+			raise "Element index #{index} out of bounds for '#{@_elements}' of length #{@_elements.length}."
+		end
+
+		return @_elements[index]
+	end
+
+	def append(obj)
+		@_elements << obj
+		return self
+	end
+
+	def length
+		return PRInteger.new(@_elements.length)
+	end
+
+	def eql(other_object)
+		return PRBool.new(false) if not other_object.is_a?(PRArray)
+		return PRBool.new(false) if not other_object.length.eql(self.length)
+		@_elements.each_with_index do |e, i|
+			if not e.compare(other_object._elements[i])._value then
+				return PRBool.new(false)
+			end
+		end	
+		return PRBool.new(true)
+	end
+
+	def description
+		elements = @_elements.map { |e| e.description._value }
+		desc = "[" + elements.join(", ") + "]"
+		return PRString.new(desc)
+	end
+end
+
+class NAKeyValuePair
+	attr_reader :key, :value
+	
+	def initialize(key, value)
+		@key, @value = key, value
+	end
+end
+
+class PRDict < PRObject
+	attr_reader :_rdict
+
+	def initialize(pairs)
+		@_rdict = {}
+		pairs.each do |pair|
+			@_rdict[pair.key] = pair.value
+		end
+	end
+
+	def fetch(obj)
+		found_value = nil
+		@_rdict.each_key do |k|
+			if k.eql(obj)._value then
+				found_value = @_rdict[k]
+				break
+			end
+		end
+
+		if found_value == nil then
+			raise "No such key #{obj} in #{self}."
+		end
+
+		return found_value
+	end
+
+	def has_key(obj)
+		@_rdict.each_key do |k|
+			if k.eql(obj)._value then
+				return PRBool.new(true)
+			end
+		end
+		PRBool.new(false)
+	end
+
+	def length
+		return PRInteger.new(@_rdict.length)
+	end
+
+	def eql(other_object)
+		return PRBool.new(false) if not other_object.is_a?(PRDict)
+		return PRBool.new(false) if not other_object.length.eql(self.length)
+		@_rdict.each_key do |k|
+			return PRBool.new(false) if not other_object.has_key(k)
+			other_value = other_object.fetch(k)
+			return PRBool.new(false) if not other_value.eql(@_rdict[k])
+		end
+		return PRBool.new(true)
+	end
+
+	def description
+		pairs = @_rdict.map { |k, v| k.description._value + ": " + v.description._value }
+		desc = "{" + pairs.join(", ") + "}"
+		return PRString.new(desc)
+	end
 end
 
 # ===== END OF CLASSES ======
@@ -264,7 +544,7 @@ def msg_send(prometheus_obj, method_signature, *args)
 	while current != nil do
 		if current.implements_method?(method_signature) then
 			assert_arg_types(method_signature, *args)
-			puts "Invoking method #{method_signature} on #{current}"
+			#puts "Invoking method #{method_signature} on #{current}"
 			return current.send(method_signature.name.to_sym, *args)
 		else
 			current = current.super
@@ -273,8 +553,32 @@ def msg_send(prometheus_obj, method_signature, *args)
 	raise "Missing method #{method_signature}. Neither #{prometheus_obj} nor any superclass implements #{method_signature}."
 end
 
-f = PRFloat.new(687.3)
-puts msg_send(f, PRMethodSignatureForObject(f, :init))
-m = PRMethodSignatureForObject(f, :add)
-puts msg_send(f, m, PRInteger.new(650)) # Should work
-#puts msg_send(f, m, PRObject.new) # Should raise an exception
+# Expose methods on objects
+PRObject.add_method(PRMethodSignature.new(:init, PRObject, false))
+PRObject.add_method(PRMethodSignature.new(:compare, PRInteger, false, [PRObject]))
+PRObject.add_method(PRMethodSignature.new(:eql, PRBool, false, [PRObject]))
+PRObject.add_method(PRMethodSignature.new(:description, PRString, false))
+
+# PRNumber methods
+PRNumber.add_method(PRMethodSignature.new(:add, PRNumber, false, [PRNumber]))
+PRNumber.add_method(PRMethodSignature.new(:subtract, PRNumber, false, [PRNumber]))
+PRNumber.add_method(PRMethodSignature.new(:divide, PRNumber, false, [PRNumber]))
+PRNumber.add_method(PRMethodSignature.new(:multiply, PRNumber, false, [PRNumber]))
+PRNumber.add_method(PRMethodSignature.new(:pow, PRNumber, false, [PRNumber]))
+
+# PRInteger methods
+PRInteger.add_method(PRMethodSignature.new(:modulus, PRInteger, false, [PRInteger]))
+
+# PRString methods
+PRString.add_method(PRMethodSignature.new(:append, PRString, false, [PRString]))
+PRString.add_method(PRMethodSignature.new(:length, PRInteger, false))
+PRString.add_method(PRMethodSignature.new(:at, PRString, false, [PRInteger]))
+PRString.add_method(PRMethodSignature.new(:substr, PRString, false, [PRInteger, PRInteger]))
+
+# PRArray methods
+PRArray.add_method(PRMethodSignature.new(:at, PRObject, false, [PRInteger]))
+PRArray.add_method(PRMethodSignature.new(:append, PRObject, false, [PRObject]))
+PRArray.add_method(PRMethodSignature.new(:length, PRInteger, false))
+
+# PRDict methods
+PRDict.add_method(PRMethodSignature.new(:fetch, PRObject, false, [PRObject]))
