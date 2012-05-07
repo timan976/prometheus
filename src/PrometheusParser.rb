@@ -90,7 +90,7 @@ class PrometheusParser
 
 			rule :decl do
 				match(:decl_specs, :declarator, '=', :assignment_exp, ";") { |type, declarator, _, val, _| VariableDeclarationNode.new(type, declarator, val) }
-				match(:decl_specs, :declarator, ";") { |type, declarator| puts "Type: #{type}"; VariableDeclarationNode.new(type, declarator) }
+				match(:decl_specs, :declarator, ";") { |type, declarator| VariableDeclarationNode.new(type, declarator) }
 			end
 
 			rule :decl_specs do
