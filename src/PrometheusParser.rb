@@ -257,7 +257,7 @@ class PrometheusParser
 				match('--', :unary_exp) { |_, a| UnaryPreDecrementNode.new(a) }
 				match('!', :unary_exp) { |_, a| LogicalNOTNode.new(a) }
 				#match(:unary_operator, :unary_exp)
-				match('-', :unary_exp) { |_, a| -a }
+				#match('-', :unary_exp) { |_, a| -a }
 				match(:postfix_exp)
 			end
 
