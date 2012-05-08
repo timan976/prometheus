@@ -226,15 +226,6 @@ class ComparisonNode
 	end
 end
 
-class UnaryOperatorNode
-	def initialize(a, op)
-		@a, @op = a, op
-	end
-
-	def evaluate(scope_frame)
-	end
-end
-
 class MethodCallNode
 	def initialize(target, method_name, *args)
 		@target, @method_name, @args = target, method_name, args
