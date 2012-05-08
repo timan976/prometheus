@@ -448,3 +448,27 @@ class ForLoopNode
 		end
 	end
 end
+
+class SubscriptNode
+	def initialize(target_node, index_node)
+		@target_node, @index_node = target_node, index_node
+	end
+
+	def evaluate(scope_frame)
+		object = object_value(@target_node, scope_frame)
+		index = object_value(@index_node, scope_frame)
+
+		if not object.is_a?(PRArray) and not object.is_a?(PRDict)
+			raise "#{object} does not support subscripting."
+		end
+
+		if object.is_a?(PRArray) then
+			assert_type(index, PRInteger)
+			method_sig = PRMethodSignatureForObject(object, :at) 
+			return msg_send(object, method_sig, index)
+		else
+			method_sig = PRMethodSignatureForObject(object, :fetch) 
+			return msg_send(object, method_sig, index)
+		end
+	end
+end

@@ -24,11 +24,11 @@ Integer l = fullname.length();
 Integer last = name.length() - 1;
 String t = name.substr(0, 1);
 Array names = ["Tim", "Johan"].append("Pelle");
-String j = names.at(2);
-Dict people = @["tim": @["age": 19, "surname": "Andersson"], "johan": @["age": 25, "surname": "Wanglov"]];
-Dict tim = people.fetch("tim");
-Integer age = tim.fetch("age");
-String surname = tim.fetch("surname");
+String johan = names[0];
+Dict people = @[name: @["age": 19, "surname": "Andersson"], "johan": @["age": 25, "surname": "Wanglov"]];
+Dict tim = people[name];
+Integer age = tim.fetch("age"); // Equivalent to tim["age"]
+String surname = tim["surname"];
 print "Hejsan Mr. <surname>!";
 a = 8;
 if(a < 8) {

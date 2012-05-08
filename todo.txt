@@ -23,4 +23,4 @@
 	implementation, class C is also reported to implement the method, even though
 	it doesn't.
 [ ] Make sure recursion works
-[ ] Subscript
+[x] Subscript

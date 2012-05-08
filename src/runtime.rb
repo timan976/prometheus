@@ -78,7 +78,7 @@ def pr_print_string(string, scope_frame)
 	puts result
 end
 
-# value should be a subclass of PRObject
+# object should be a subclass of PRObject
 def boolean_value(object)
 	return object if object.is_a?(PRBool)
 	return PRBool.new(false) if object.is_a?(PRNil)
@@ -336,7 +336,6 @@ class PRNumber < PRObject
 		return PRString.new(@_value.to_s)
 	end
 end
-# Expose methods on PRNumber
 
 class PRInteger < PRNumber
 	def initialize(n = 0)
@@ -348,8 +347,6 @@ class PRInteger < PRNumber
 		PRInteger.new(@_value % x._value)
 	end
 end
-# This needs to be added here since PRInteger isn't defined yet if we put it below
-# the definition of PRObject
 
 class PRFloat < PRNumber
 	def initialize(n = 0)
@@ -439,7 +436,7 @@ class PRArray < PRObject
 	def at(i)
 		index = i._value
 		if index < 0 || index >= @_elements.length then
-			raise "Element index #{index} out of bounds for '#{@_elements}' of length #{@_elements.length}."
+			raise "Element index #{index} out of bounds for '#{self.description._value}' of length #{@_elements.length}."
 		end
 
 		return @_elements[index]
@@ -500,7 +497,7 @@ class PRDict < PRObject
 		end
 
 		if found_value == nil then
-			raise "No such key #{obj} in #{self}."
+			raise "No such key #{obj} in #{self.description._value}."
 		end
 
 		return found_value

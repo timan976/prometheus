@@ -13,7 +13,7 @@ class PrometheusParser
 			# Separators
 			token(/^\;/) { |s| s }
 			# Parenthesis
-			token(/^(\(|\)|\}|\{)/) { |p| p }
+			token(/^(\(|\)|\}|\{|\[|\])/) { |p| p }
 			# String
 			token(/^("[^"]*")/) { |s| ConstantNode.new(PRString.new(s[1,s.length - 2])) }
 			# Float
@@ -268,6 +268,7 @@ class PrometheusParser
 			rule :postfix_exp do
 				match(:postfix_exp, '++') { |a, _| UnaryPostIncrementNode.new(a) }
 				match(:postfix_exp, '--') { |a, _| UnaryPostDecrementNode.new(a) }
+				match(:postfix_exp, '[', :exp, ']') { |target, _, index, _| SubscriptNode.new(target, index) }
 				match(:postfix_exp, '(', :argument_exp_list, ')') { |target, _, args, _| FunctionCallNode.new(target, args) }
 				match(:postfix_exp, '(', ')') { |target, _, _| FunctionCallNode.new(target) }
 				match(:postfix_exp, '.', :id) { |target, _, name| MethodLookupNode.new(target, name) }
