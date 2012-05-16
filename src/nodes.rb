@@ -456,7 +456,10 @@ class ForLoopNode < Node
 		new_scope = NAScopeFrame.new("for", scope_frame)
 		@declaration.evaluate(new_scope) if @declaration != nil
 		while @condition == nil or boolean_value(object_value(@condition, new_scope))._value do
-			@stat.evaluate(new_scope) if @stat != nil
+			if @stat != nil then
+				res = @stat.evaluate(new_scope)
+				return res if res.is_a?(NAReturnValue)
+			end
 			@control.evaluate(new_scope) if @control != nil
 		end
 	end

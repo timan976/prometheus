@@ -7,10 +7,10 @@
 [x] Dicts
 [x] Print
 [ ] nil values
-[ ] Void
+[x] Void
 [x] Function declarations
 [x] Function calls
-[ ] Return statements
+[x] Return statements
 [x] Method calls
 [x] Assignment
 [x] Unary operators
@@ -22,5 +22,6 @@
     are subclasses of class A and a method is added to class B. In the current
 	implementation, class C is also reported to implement the method, even though
 	it doesn't.
-[ ] Make sure recursion works
+[x] Make sure recursion works
 [x] Subscript
+[ ] Using variables in strings shouldn't only work with 'print'.

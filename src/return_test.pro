@@ -1,8 +1,7 @@
 Integer foo(Integer b) {
 	Integer i = 0;
-	while(i < 5) {
+	for(i = 0; i < 5; i++) {
 		print i;
-		i++;
 	}
 	return i;
 }
