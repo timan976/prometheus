@@ -63,7 +63,7 @@ class ArithmeticOperatorNode < BinaryOperatorNode
 			raise "Invalid type (#{target.class}) of left operand for '#{@op}'!"
 		end
 
-		msg_send(target, method_signature, arg)
+		msg_send(target, method_signature, scope_frame, arg)
 	end
 end
 
@@ -113,7 +113,7 @@ class EqualityNode < Node
 	def evaluate(scope_frame)
 		left_value = object_value(@left_operand, scope_frame)
 		right_value = object_value(@right_operand, scope_frame)
-		return left_value.eql(right_value)
+		return left_value.eql(right_value, scope_frame)
 	end
 end
 
@@ -129,12 +129,12 @@ class UnaryPreIncrementNode < Node
 			value = object.value
 			assert_type(value, PRNumber)
 
-			object.assign(value.add(PRInteger.new(1)))
+			object.assign(value.add(PRInteger.new(1), scope_frame))
 			return object.value
 		end
 
 		assert_type(object, PRNumber)
-		return object.add(PRInteger.new(1))
+		return object.add(PRInteger.new(1), scope_frame)
 	end
 end
 
@@ -150,7 +150,7 @@ class UnaryPostIncrementNode < Node
 			original_value = object.value
 			assert_type(original_value, PRNumber)
 
-			object.assign(original_value.add(PRInteger.new(1)))
+			object.assign(original_value.add(PRInteger.new(1), scope_frame))
 			return original_value
 		end
 
@@ -171,12 +171,12 @@ class UnaryPreDecrementNode < Node
 			value = object.value
 			assert_type(value, PRNumber)
 
-			object.assign(value.subtract(PRInteger.new(1)))
+			object.assign(value.subtract(PRInteger.new(1), scope_frame))
 			return object.value
 		end
 
 		assert_type(object, PRNumber)
-		return object.subtract(PRInteger.new(1))
+		return object.subtract(PRInteger.new(1), scope_frame)
 	end
 end
 
@@ -192,7 +192,7 @@ class UnaryPostDecrementNode < Node
 			original_value = object.value
 			assert_type(original_value, PRNumber)
 
-			object.assign(original_value.subtract(PRInteger.new(1)))
+			object.assign(original_value.subtract(PRInteger.new(1), scope_frame))
 			return original_value
 		end
 
@@ -214,7 +214,7 @@ class ComparisonNode < Node
 		assert_type(right_value, PRNumber)
 
 		method_signature = PRMethodSignatureForObject(left_value, :compare)
-		comparison_result = msg_send(left_value, method_signature, right_value)
+		comparison_result = msg_send(left_value, method_signature, scope_frame, right_value)
 
 		case @operator
 		when "<"
@@ -481,10 +481,31 @@ class SubscriptNode < Node
 		if object.is_a?(PRArray) then
 			assert_type(index, PRInteger)
 			method_sig = PRMethodSignatureForObject(object, :at) 
-			return msg_send(object, method_sig, index)
+			return msg_send(object, method_sig, scope_frame, index)
 		else
 			method_sig = PRMethodSignatureForObject(object, :fetch) 
-			return msg_send(object, method_sig, index)
+			return msg_send(object, method_sig, scope_frame, index)
 		end
+	end
+end
+
+class BlockNode < Node
+	def initialize(body, params = [])
+		@body, @parameter_nodes = body, params
+	end
+
+	def evaluate(scope_frame)
+		params = []
+		@parameter_nodes.each { |node| params << node.evaluate(scope_frame) }
+		
+		# The following makes sure that only arguments and
+		# variables declared before the block was declared
+		# can be used inside the block.
+		# In other words, it implements static scoping.
+		variables = scope_frame.flatten
+		closure = NAScopeFrame.new("closure")
+		variables.each { |k, v| closure.add(v) }
+
+		return PRBlock.new(params, @body, closure)
 	end
 end

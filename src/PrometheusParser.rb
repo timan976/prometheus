@@ -11,7 +11,7 @@ class PrometheusParser
 			# Comments
 			token(/^(\/\/.*)/)
 			# Separators
-			token(/^\;/) { |s| s }
+			token(/^(\;|\^)/) { |s| s }
 			# Parenthesis
 			token(/^(\(|\)|\}|\{|\[|\])/) { |p| p }
 			# String
@@ -67,6 +67,17 @@ class PrometheusParser
 				match(:decl_list)
 			end
 
+			rule :statements do
+				match(:statements, :decl_list) do |a, b|
+					[].concat(a).concat(b)
+				end
+				match(:statements, :stat_list) do |a, b|
+					[].concat(a).concat(b)
+				end
+				match(:stat_list)
+				match(:decl_list)
+			end
+
 			rule :function_definition do
 				match(:type_spec, :function_name, '(', :param_list, ')', :compound_stat) do |t, name, _, params, _, body|
 					[FunctionDeclarationNode.new(t, name, params, body)]
@@ -92,8 +103,9 @@ class PrometheusParser
 			end
 
 			rule :decl do
-				match(:decl_specs, :declarator, '=', :assignment_exp, ";") { |type, declarator, _, val, _| VariableDeclarationNode.new(type, declarator, val) }
-				match(:decl_specs, :declarator, ";") { |type, declarator| VariableDeclarationNode.new(type, declarator) }
+				match(:classname, :declarator, '=', :block_exp) { |type, declarator, _, val| VariableDeclarationNode.new(type, declarator, val) }
+				match(:classname, :declarator, '=', :assignment_exp, ";") { |type, declarator, _, val, _| VariableDeclarationNode.new(type, declarator, val) }
+				match(:classname, :declarator, ";") { |type, declarator| VariableDeclarationNode.new(type, declarator) }
 			end
 
 			rule :decl_specs do
@@ -103,11 +115,6 @@ class PrometheusParser
 			rule :type_spec do
 				match('Void')
 				match(:classname)
-			end
-
-			rule :init_declarator do
-				match(:declarator, '=', :assignment_exp)
-				match(:declarator)
 			end
 
 			rule :declarator do
@@ -172,9 +179,9 @@ class PrometheusParser
 			end
 
 			rule :compound_stat do
-			 	match('{', :decl_list, :stat_list, '}') { |_, a, b, _| CompoundStatementNode.new([].concat(a).concat(b)) }
-			 	match('{', :stat_list, '}') { |_, a, _| CompoundStatementNode.new(a) }
-			 	match('{', :decl_list, '}') { |_, a, _| CompoundStatementNode.new(a) }
+			 	#match('{', :decl_list, :stat_list, '}') { |_, a, b, _| CompoundStatementNode.new([].concat(a).concat(b)) }
+			 	#match('{', :stat_list, '}') { |_, a, _| CompoundStatementNode.new(a) }
+			 	match('{', :statements, '}') { |_, a, _| CompoundStatementNode.new(a) }
 				match('{', '}') { |_, _| CompoundStatementNode.new() }
 			end
 			
@@ -195,6 +202,11 @@ class PrometheusParser
 			rule :exp do
 				match(:exp, ',', :assignment_exp)
 				match(:assignment_exp)
+			end
+
+			rule :block_exp do
+				match('^', '(', :param_list, ')', :compound_stat) { |_, _, params, _, body| BlockNode.new(body, params) }
+				match('^', '(', ')', :compound_stat) { |_, _, _, body| BlockNode.new(body) }
 			end
 
 			rule :assignment_exp do
@@ -306,6 +318,7 @@ class PrometheusParser
 				match('(', :exp ,')') { |_, e, _| e }
 				match('@', '[', :key_value_list, ']') { |_, _, pairs, _| DictLiteralNode.new(pairs) }
 				match('[', :argument_exp_list, ']') { |_, elements, _| ArrayLiteralNode.new(elements) }
+				match(:block_exp)
 				match(String) { |name| ScopeLookupNode.new(name) }
 				match(:const)
 			end
@@ -364,12 +377,12 @@ class PrometheusParser
 
 		puts "Running #{filename}..."
 			@parser.logger.level = Logger::WARN
-			begin
+			#begin
 				val = @parser.parse(IO.read(filename))
 				val.evaluate(@@global_frame) if val != nil
-			rescue Exception => e
-				puts "An error occured: #{e}"
-			end
+			#rescue Exception => e
+			#	puts "An error occured: #{e}"
+			#end
 	end
 end
 

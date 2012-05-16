@@ -14,7 +14,7 @@ def assert_arg_types(method_signature, *args)
 	args.each_with_index do |specified_arg, i|
 		type = method_signature.arg_types[i]
 		if not specified_arg.is_a?(type) then
-			raise "Wrong type of argument #{i + 1} for #{method_signature}. Expected to be #{type}, but was #{specified_arg.class}."
+			raise "Wrong type of argument #{i + 1} for #{method_signature}. Expected to be #{pr_type(type)}, but was #{pr_type(specified_arg.class)}."
 		end
 	end
 end
@@ -27,7 +27,7 @@ def assert_function_arg_types(function, *args)
 	args.each_with_index do |argument, i|
 		param = function.parameters[i]
 		if not argument.is_a?(param.type) then
-			raise "Wrong type of argument #{i + 1} for #{function}. Expected to be #{param.type}, but was #{argument.class}."
+			raise "Wrong type of argument #{i + 1} for #{function}. Expected to be #{pr_type(param.type)}, but was #{pr_type(argument.class)}."
 		end
 	end
 end
@@ -55,9 +55,13 @@ end
 def assert_return_value(function, return_value)
 	if function.return_type == PRVoid and return_value != nil then
 		raise "Function '#{function.name}' is declared Void but returned #{return_value}."
-	elsif function.return_type != PRVoid and return_value == nil then
+	end
+
+	if function.return_type != PRVoid and return_value == nil then
 		raise "Function '#{function.name}' is declared #{pr_type(function.return_type)} but didn't return a value."
-	elsif not return_value.is_a?(function.return_type) then
+	end 
+
+	if function.return_type != PRVoid and not return_value.is_a?(function.return_type) then
 		raise "Type of returned object (#{pr_type(return_value.class)}) does not match return type of function #{function}."
 	end
 end
@@ -73,7 +77,7 @@ def pr_print(value, scope_frame)
 		pr_print_string(value, scope_frame)
 	else
 		method_signature = PRMethodSignatureForObject(value, :description)
-		str = msg_send(value, method_signature)
+		str = msg_send(value, method_signature, scope_frame)
 		pr_print_string(str, scope_frame)
 	end
 end
@@ -83,7 +87,7 @@ def pr_print_string(string, scope_frame)
 		var_name = var_name[1, var_name.length - 2]
 		value = scope_frame.fetch(var_name.to_sym).value
 		method_signature = PRMethodSignatureForObject(value, :description)
-		msg_send(value, method_signature)._value
+		msg_send(value, method_signature, scope_frame)._value
 	end
 	puts result
 end
@@ -166,6 +170,11 @@ class NAScopeFrame
 		return @parent.root_scope
 	end
 
+	def flatten
+		return @stack if @parent == nil
+		return @stack.merge(@parent.flatten)
+	end
+
 	def to_s
 		"#<#{self.class}:#{@stack.inspect}>"
 	end
@@ -177,8 +186,8 @@ class NAMethodInvocation
 		@receiver, @method_signature = receiver, method_signature
 	end
 
-	def call(arguments, scope=nil)
-		return msg_send(@receiver, @method_signature, *arguments)
+	def call(arguments, scope_frame=nil)
+		return msg_send(@receiver, @method_signature, scope_frame, *arguments)
 	end
 end
 
@@ -219,6 +228,7 @@ class NAFunction
 	end
 end
 
+
 class NAReturnValue
 	attr_reader :value
 	def initialize(val = nil)
@@ -248,9 +258,9 @@ class PRMethodSignature
 	end
 
 	def to_s
-		arg_list = @arg_types.join(", ")
+		arg_list = @arg_types.map { |t| pr_type(t) }.join(", ")
 		prefix = if is_class_method? then "+" else "-" end
-		"`#{prefix} #{@return_type} #{@name}(#{arg_list})`"
+		"`#{prefix} #{pr_type(@return_type)} #{@name}(#{arg_list})`"
 	end
 end
 
@@ -272,11 +282,11 @@ class PRObject
 		puts "#{self.class} init"
 	end
 
-	def compare(other_object)
+	def compare(other_object, scope_frame)
 		return PRInteger.new(0)
 	end
 
-	def eql(other_object)
+	def eql(other_object, scope_frame)
 		return PRBool.new(false)
 	end
 
@@ -286,12 +296,38 @@ class PRObject
 		return candidate.eql?(method_signature)
 	end
 
-	def description
+	def description(scope_frame)
 		return PRString.new(self.inspect)
 	end
 
 	def self._mtable
 		@@_mtable
+	end
+end
+
+class PRBlock < PRObject
+	attr_reader :parameters
+	def initialize(params, body, closure)
+		@parameters, @body, @closure = params, body, closure
+	end
+
+	def call(arguments, scope_frame)
+		assert_function_arg_types(self, *arguments)
+
+		# Create a new scope with the passed in arguments
+		block_scope = NAScopeFrame.new("block", @closure)
+		@parameters.each_with_index do |param, i|
+			arg = NAVariable.new(param.name, param.type, arguments[i])
+			block_scope.add(arg)
+		end
+
+		return object_value(@body, block_scope)
+	end
+
+	def description(scope_frame)
+		params = @parameters.map { |p| "#{p.type} #{p.name}" }.join(", ")
+		desc = "<Block:^(#{params})>"
+		return PRString.new(desc)
 	end
 end
 
@@ -303,7 +339,7 @@ end
 
 class PRNumber < PRObject
 	attr_accessor :_value
-	def add(x)
+	def add(x, scope_frame)
 		assert_type(x, PRNumber)
 
 		new_class = PRInteger
@@ -313,7 +349,7 @@ class PRNumber < PRObject
 		new_class.new(@_value + x._value)
 	end
 
-	def subtract(x)
+	def subtract(x, scope_frame)
 		assert_type(x, PRNumber)
 
 		new_class = PRInteger
@@ -323,7 +359,7 @@ class PRNumber < PRObject
 		new_class.new(@_value - x._value)
 	end
 
-	def divide(x)
+	def divide(x, scope_frame)
 		assert_type(x, PRNumber)
 		result = @_value / x._value
 		new_class = PRInteger
@@ -331,7 +367,7 @@ class PRNumber < PRObject
 		new_class.new(result)
 	end
 
-	def multiply(x)
+	def multiply(x, scope_frame)
 		assert_type(x, PRNumber)
 
 		new_class = PRInteger
@@ -341,7 +377,7 @@ class PRNumber < PRObject
 		new_class.new(@_value * x._value)
 	end
 
-	def pow(x)
+	def pow(x, scope_frame)
 		assert_type(x, PRNumber)
 
 		new_class = PRInteger
@@ -351,12 +387,12 @@ class PRNumber < PRObject
 		new_class.new(@_value ** x._value)
 	end
 
-	def compare(other_object)
+	def compare(other_object, scope_frame)
 		assert_type(other_object, PRNumber)
 		PRInteger.new(@_value <=> other_object._value)
 	end
 
-	def eql(other_object)
+	def eql(other_object, scope_frame)
 		return PRBool.new(false) if not other_object.is_a?(PRNumber)
 		return PRBool.new(@_value == other_object._value)
 	end
@@ -365,7 +401,7 @@ class PRNumber < PRObject
 		"<#{self.class}:0x%08x:#{@_value}>" % self.object_id
 	end
 
-	def description
+	def description(scope_frame)
 		return PRString.new(@_value.to_s)
 	end
 end
@@ -376,7 +412,7 @@ class PRInteger < PRNumber
 		@_value = n.to_i
 	end
 
-	def modulus(x)
+	def modulus(x, scope_frame)
 		PRInteger.new(@_value % x._value)
 	end
 end
@@ -399,11 +435,11 @@ class PRBool < PRObject
 		"<#{self.class}:0x%08x:#{@_value}>" % self.object_id
 	end
 
-	def description
+	def description(scope_frame)
 		return PRString.new(@_value.to_s)
 	end
 
-	def eql(other_object)
+	def eql(other_object, scope_frame)
 		return PRBool.new(false) if not other_object.is_a?(PRBool)
 		return PRBool.new(@_value == other_object._value)
 	end
@@ -415,15 +451,15 @@ class PRString < PRObject
 		@_value = str
 	end
 
-	def append(str)
+	def append(str, scope_frame)
 		return PRString.new(@_value + str._value)
 	end
 
-	def length
+	def length(scope_frame)
 		return PRInteger.new(@_value.length)
 	end
 
-	def at(i)
+	def at(i, scope_frame)
 		index = i._value
 		if index < 0 || index >= @_value.length then
 			raise "Character index #{index} out of bounds for '#{@_value}' of length #{@_value.length}."
@@ -432,7 +468,7 @@ class PRString < PRObject
 		return PRString.new(@_value[index])
 	end
 
-	def substr(start, n)
+	def substr(start, n, scope_frame)
 		index = start._value
 		if index < 0 || index >= @_value.length then
 			raise "Start index #{index} for subrange is out of bounds for '#{@_value}' of length #{@_value.length}."
@@ -449,11 +485,11 @@ class PRString < PRObject
 		"<#{self.class}:0x%08x:#{@_value}>" % self.object_id
 	end
 
-	def description
+	def description(scope_frame)
 		return self
 	end
 
-	def eql(other_object)
+	def eql(other_object, scope_frame)
 		return PRBool.new(false) if not other_object.is_a?(PRString)
 		return PRBool.new(@_value == other_object._value)
 	end
@@ -466,7 +502,7 @@ class PRArray < PRObject
 		@_elements = elements
 	end
 
-	def at(i)
+	def at(i, scope_frame)
 		index = i._value
 		if index < 0 || index >= @_elements.length then
 			raise "Element index #{index} out of bounds for '#{self.description._value}' of length #{@_elements.length}."
@@ -475,28 +511,36 @@ class PRArray < PRObject
 		return @_elements[index]
 	end
 
-	def append(obj)
+	def append(obj, scope_frame)
 		@_elements << obj
 		return self
 	end
 
-	def length
+	def length(scope_frame)
 		return PRInteger.new(@_elements.length)
 	end
 
-	def eql(other_object)
+	def map(block, scope_frame)
+		result = []
+		@_elements.each do |e|
+			result << block.call([e], scope_frame)
+		end
+		return PRArray.new(result)
+	end
+
+	def eql(other_object, scope_frame)
 		return PRBool.new(false) if not other_object.is_a?(PRArray)
-		return PRBool.new(false) if not other_object.length.eql(self.length)
+		return PRBool.new(false) if not other_object.length.eql(self.length, scope_frame)
 		@_elements.each_with_index do |e, i|
-			if not e.compare(other_object._elements[i])._value then
+			if not e.compare(other_object._elements[i], scope_frame)._value then
 				return PRBool.new(false)
 			end
 		end	
 		return PRBool.new(true)
 	end
 
-	def description
-		elements = @_elements.map { |e| e.description._value }
+	def description(scope_frame)
+		elements = @_elements.map { |e| e.description(scope_frame)._value }
 		desc = "[" + elements.join(", ") + "]"
 		return PRString.new(desc)
 	end
@@ -520,10 +564,10 @@ class PRDict < PRObject
 		end
 	end
 
-	def fetch(obj)
+	def fetch(obj, scope_frame)
 		found_value = nil
 		@_rdict.each_key do |k|
-			if k.eql(obj)._value then
+			if k.eql(obj, scope_frame)._value then
 				found_value = @_rdict[k]
 				break
 			end
@@ -536,7 +580,7 @@ class PRDict < PRObject
 		return found_value
 	end
 
-	def has_key(obj)
+	def has_key(obj, scope_frame)
 		@_rdict.each_key do |k|
 			if k.eql(obj)._value then
 				return PRBool.new(true)
@@ -545,11 +589,11 @@ class PRDict < PRObject
 		PRBool.new(false)
 	end
 
-	def length
+	def length(scope_frame)
 		return PRInteger.new(@_rdict.length)
 	end
 
-	def eql(other_object)
+	def eql(other_object, scope_frame)
 		return PRBool.new(false) if not other_object.is_a?(PRDict)
 		return PRBool.new(false) if not other_object.length.eql(self.length)
 		@_rdict.each_key do |k|
@@ -560,8 +604,8 @@ class PRDict < PRObject
 		return PRBool.new(true)
 	end
 
-	def description
-		pairs = @_rdict.map { |k, v| k.description._value + ": " + v.description._value }
+	def description(scope_frame)
+		pairs = @_rdict.map { |k, v| k.description(scope_frame)._value + ": " + v.description(scope_frame)._value }
 		desc = "{" + pairs.join(", ") + "}"
 		return PRString.new(desc)
 	end
@@ -569,12 +613,13 @@ end
 
 # ===== END OF CLASSES ======
 
-def msg_send(prometheus_obj, method_signature, *args)
+def msg_send(prometheus_obj, method_signature, scope_frame, *args)
 	current = prometheus_obj
 	while current != nil do
 		if current.implements_method?(method_signature) then
 			assert_arg_types(method_signature, *args)
 			#puts "Invoking method #{method_signature} on #{current}"
+			args << scope_frame
 			return current.send(method_signature.name.to_sym, *args)
 		else
 			current = current.super
@@ -609,6 +654,7 @@ PRString.add_method(PRMethodSignature.new(:substr, PRString, false, [PRInteger, 
 PRArray.add_method(PRMethodSignature.new(:at, PRObject, false, [PRInteger]))
 PRArray.add_method(PRMethodSignature.new(:append, PRObject, false, [PRObject]))
 PRArray.add_method(PRMethodSignature.new(:length, PRInteger, false))
+PRArray.add_method(PRMethodSignature.new(:map, PRArray, false, [PRBlock]))
 
 # PRDict methods
 PRDict.add_method(PRMethodSignature.new(:fetch, PRObject, false, [PRObject]))
