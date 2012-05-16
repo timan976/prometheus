@@ -16,7 +16,7 @@ end
 # node for example is a VariableReferenceNode.
 def object_value(node, scope_frame)
 	obj = node.evaluate(scope_frame)
-	if obj.is_a?(NAVariable)
+	if obj.is_a?(NAVariable) or obj.is_a?(NAReturnValue)
 		return obj.value
 	end
 	return obj

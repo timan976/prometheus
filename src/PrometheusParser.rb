@@ -60,7 +60,8 @@ class PrometheusParser
 					[].concat(a).concat(b)
 				end
 				match(:top_level_statements, :function_definition) do |a, b|
-					a << b
+					puts "#{a.inspect} - #{b.inspect}"
+					[].concat(a).concat(b)
 				end
 				match(:function_definition)
 				match(:stat_list)
@@ -70,6 +71,9 @@ class PrometheusParser
 			rule :function_definition do
 				match(:type_spec, :function_name, '(', :param_list, ')', :compound_stat) do |t, name, _, params, _, body|
 					[FunctionDeclarationNode.new(t, name, params, body)]
+				end
+				match(:type_spec, :function_name, '(', ')', :compound_stat) do |t, name, _, _, body|
+					[FunctionDeclarationNode.new(t, name, [], body)]
 				end
 			end
 
@@ -361,12 +365,12 @@ class PrometheusParser
 
 		puts "Running #{filename}..."
 			@parser.logger.level = Logger::WARN
-			begin
+			#begin
 				val = @parser.parse(IO.read(filename))
 				val.evaluate(@@global_frame) if val != nil
-			rescue Exception => e
-				puts "An error occured: #{e}"
-			end
+			#rescue Exception => e
+			#	puts "An error occured: #{e}"
+			#end
 		#puts "Scope is: #{@@global_frame}"
 	end
 end

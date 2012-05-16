@@ -189,7 +189,15 @@ class NAFunction
 			function_scope.add(arg)
 		end
 
+		return object_value(@body, function_scope)
 		return @body.evaluate(function_scope)
+	end
+end
+
+class NAReturnValue
+	attr_reader :value
+	def initialize(val = nil)
+		@value = val
 	end
 end
 

@@ -247,6 +247,7 @@ class FunctionCallNode
 		function = object_value(@target, scope_frame)
 		#puts "Calling function #{function} with arguments #{arg_values}"
 		result = function.call(arg_values, scope_frame)
+		puts "Function #{function.name} returned #{result}"
 		return result
 	end
 end
@@ -278,7 +279,7 @@ class FunctionDeclarationNode
 		@parameter_nodes.each { |node| params << node.evaluate(scope_frame) }
 
 		function = NAFunction.new(@name, native_type, params, @body)
-		assert_return(function)
+		#assert_return(function)
 
 		#puts "Declared a function: #{function.body}"
 		scope_frame.add(function)
@@ -303,7 +304,8 @@ class ReturnStatementNode
 	end
 
 	def evaluate(scope_frame)
-		@statement.evaluate(scope_frame) if @statement != nil
+		return NAReturnValue.new() if @statement == nil
+		return NAReturnValue.new(@statement.evaluate(scope_frame))
 	end
 end
 
@@ -353,7 +355,17 @@ class CompoundStatementNode
 
 	def evaluate(scope_frame)
 		return if @statements == nil
-		@statements.each { |s| s.evaluate(scope_frame) }
+		ret_val = nil
+		@statements.each do |s| 
+			res = s.evaluate(scope_frame)
+			puts "#{s} evaluated to #{res}"
+			if res.is_a?(NAReturnValue) then
+				puts "Found return"
+				ret_val = res
+				break
+			end
+		end
+		return ret_val
 	end
 end
 
@@ -429,7 +441,8 @@ class WhileLoopNode
 	def evaluate(scope_frame)
 		new_scope = NAScopeFrame.new("while", scope_frame)
 		while boolean_value(object_value(@condition, new_scope))._value do
-			@stat.evaluate(new_scope)
+			res = @stat.evaluate(new_scope)
+			return res if res.is_a?(NAReturnValue)
 		end
 	end
 end
