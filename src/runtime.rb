@@ -52,6 +52,16 @@ def assert_return(function)
 	end
 end
 
+def assert_return_value(function, return_value)
+	if function.return_type == PRVoid and return_value != nil then
+		raise "Function '#{function.name}' is declared Void but returned #{return_value}."
+	elsif function.return_type != PRVoid and return_value == nil then
+		raise "Function '#{function.name}' is declared #{pr_type(function.return_type)} but didn't return a value."
+	elsif not return_value.is_a?(function.return_type) then
+		raise "Type of returned object (#{pr_type(return_value.class)}) does not match return type of function #{function}."
+	end
+end
+
 def assert_method(target, method_sig)
 	if not target.implements_method?(method_sig) then
 		raise "Object of class '#{target.class}' does not implement #{method_sig}."
@@ -95,10 +105,11 @@ end
 # use only.
 
 class NAVariable
-	attr_reader :name, :value
+	attr_reader :name, :value, :type
 
 	# name should be a Ruby string
 	# value should be a subclass of PRObject
+	# type should be a string (e.g. "String", "Integer", etc.)
 	def initialize(name, type, value)
 		@name, @type= name, type
 		assign(value)
@@ -127,9 +138,9 @@ class NAScopeFrame
 		name = var.name.to_sym
 		if (existing_variable = @stack.fetch(name, nil)) != nil then
 			raise "Trying to re-declare variable '#{existing_variable.name}' already declared in current scope."
-		else
-			if @stack.has_key?(name) then
-				shadowed_var = @stack[name]
+		elsif @parent != nil then
+			if @parent.has_variable?(name) then
+				shadowed_var = @parent.fetch(name)
 				puts "Warning: Declaring '#{var.type} #{var.name}' will shadow previously defined '#{shadowed_var.type} #{shadowed_var.name}'."
 			end
 		end
@@ -141,6 +152,13 @@ class NAScopeFrame
 		return @stack[name] if @stack.has_key?(name)
 		return parent.fetch(name) if parent != nil
 		raise "No such variable '#{var_name}' in current scope."
+	end
+
+	def has_variable?(var_name)
+		name = var_name.to_sym
+		return true if @stack.has_key?(name)
+		return parent.has_variable?(name) if parent != nil
+		return false
 	end
 
 	def root_scope
@@ -189,8 +207,15 @@ class NAFunction
 			function_scope.add(arg)
 		end
 
-		return object_value(@body, function_scope)
-		return @body.evaluate(function_scope)
+		res = object_value(@body, function_scope)
+		assert_return_value(self, res)
+
+		return res
+	end
+
+	def to_s
+		params = @parameters.map { |p| p.type }.join(", ")
+		return "`#{pr_type(@return_type)} #{@name}(#{params})`"
 	end
 end
 

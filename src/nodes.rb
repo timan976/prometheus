@@ -1,6 +1,9 @@
 require './runtime.rb'
 
-class ProgramNode
+class Node
+end
+
+class ProgramNode < Node
 	def initialize(statements)
 		@statements = statements
 	end
@@ -10,7 +13,7 @@ class ProgramNode
 	end
 end
 
-class ConstantNode
+class ConstantNode < Node
 	def initialize(n)
 		@n = n
 	end
@@ -20,7 +23,7 @@ class ConstantNode
 	end
 end
 
-class PrintNode
+class PrintNode < Node
 	def initialize(statement)
 		@statement = statement
 	end
@@ -30,7 +33,7 @@ class PrintNode
 	end
 end
 
-class BinaryOperatorNode
+class BinaryOperatorNode < Node
 	def initialize(a, b, op)
 		@a, @b, @op = a, b, op
 	end
@@ -64,7 +67,7 @@ class ArithmeticOperatorNode < BinaryOperatorNode
 	end
 end
 
-class LogicalANDNode
+class LogicalANDNode < Node
 	def initialize(left, right)
 		@left_operand, @right_operand = left, right
 	end
@@ -77,7 +80,7 @@ class LogicalANDNode
 	end
 end
 
-class LogicalORNode
+class LogicalORNode < Node
 	def initialize(left, right)
 		@left_operand, @right_operand = left, right
 	end
@@ -90,7 +93,7 @@ class LogicalORNode
 	end
 end
 
-class LogicalNOTNode
+class LogicalNOTNode < Node
 	def initialize(operand)
 		@operand = operand
 	end
@@ -102,7 +105,7 @@ class LogicalNOTNode
 	end
 end
 
-class EqualityNode
+class EqualityNode < Node
 	def initialize(left, right)
 		@left_operand, @right_operand = left, right
 	end
@@ -114,7 +117,7 @@ class EqualityNode
 	end
 end
 
-class UnaryPreIncrementNode
+class UnaryPreIncrementNode < Node
 	def initialize(operand)
 		@operand = operand
 	end
@@ -135,7 +138,7 @@ class UnaryPreIncrementNode
 	end
 end
 
-class UnaryPostIncrementNode
+class UnaryPostIncrementNode < Node
 	def initialize(operand)
 		@operand = operand
 	end
@@ -156,7 +159,7 @@ class UnaryPostIncrementNode
 	end
 end
 
-class UnaryPreDecrementNode
+class UnaryPreDecrementNode < Node
 	def initialize(operand)
 		@operand = operand
 	end
@@ -177,7 +180,7 @@ class UnaryPreDecrementNode
 	end
 end
 
-class UnaryPostDecrementNode
+class UnaryPostDecrementNode < Node
 	def initialize(operand)
 		@operand = operand
 	end
@@ -198,7 +201,7 @@ class UnaryPostDecrementNode
 	end
 end
 
-class ComparisonNode
+class ComparisonNode < Node
 	def initialize(left_operand, op, right_operand)
 		@left_operand, @operator, @right_operand = left_operand, op, right_operand
 	end
@@ -226,7 +229,7 @@ class ComparisonNode
 	end
 end
 
-class MethodCallNode
+class MethodCallNode < Node
 	def initialize(target, method_name, *args)
 		@target, @method_name, @args = target, method_name, args
 	end
@@ -236,7 +239,7 @@ class MethodCallNode
 	end
 end
 
-class FunctionCallNode
+class FunctionCallNode < Node
 	def initialize(target, args=[])
 		@target, @args = target, args
 	end
@@ -247,12 +250,11 @@ class FunctionCallNode
 		function = object_value(@target, scope_frame)
 		#puts "Calling function #{function} with arguments #{arg_values}"
 		result = function.call(arg_values, scope_frame)
-		puts "Function #{function.name} returned #{result}"
 		return result
 	end
 end
 
-class VariableDeclarationNode
+class VariableDeclarationNode < Node
 	def initialize(type, name, value=nil)
 		#puts "Variable declaration: #{name} = #{value}"
 		@type, @name, @value = type, name, value
@@ -268,7 +270,7 @@ class VariableDeclarationNode
 	end
 end
 
-class FunctionDeclarationNode
+class FunctionDeclarationNode < Node
 	def initialize(type, name, parameters, body)
 		@type, @name, @parameter_nodes, @body = type, name, parameters, body
 	end
@@ -286,7 +288,7 @@ class FunctionDeclarationNode
 	end
 end
 
-class ParameterDeclarationNode
+class ParameterDeclarationNode < Node
 	def initialize(type, name)
 		@type, @name = type, name
 	end
@@ -296,7 +298,7 @@ class ParameterDeclarationNode
 	end
 end
 
-class ReturnStatementNode
+class ReturnStatementNode < Node
 	attr_reader :statement
 
 	def initialize(statement = nil)
@@ -309,7 +311,7 @@ class ReturnStatementNode
 	end
 end
 
-class ScopeLookupNode
+class ScopeLookupNode < Node
 	def initialize(variable_name)
 		#puts "Variable reference: #{variable_name.class}"
 		@variable_name = variable_name
@@ -320,7 +322,7 @@ class ScopeLookupNode
 	end
 end
 
-class MethodLookupNode
+class MethodLookupNode < Node
 	def initialize(receiver, method_name)
 		@receiver_node, @method_name = receiver, method_name
 	end
@@ -335,7 +337,7 @@ end
 
 # Needs to be updated to support other types of
 # assignment than direct variable assignment (such as subscript assignment).
-class AssignmentNode
+class AssignmentNode < Node
 	def initialize(variable_node, value_node)
 		@variable_node, @value_node = variable_node, value_node
 	end
@@ -347,7 +349,7 @@ class AssignmentNode
 	end
 end
 
-class CompoundStatementNode
+class CompoundStatementNode < Node
 	attr_reader :statements
 	def initialize(statements = nil)
 		@statements = statements
@@ -358,9 +360,7 @@ class CompoundStatementNode
 		ret_val = nil
 		@statements.each do |s| 
 			res = s.evaluate(scope_frame)
-			puts "#{s} evaluated to #{res}"
 			if res.is_a?(NAReturnValue) then
-				puts "Found return"
 				ret_val = res
 				break
 			end
@@ -369,7 +369,7 @@ class CompoundStatementNode
 	end
 end
 
-class ArrayLiteralNode
+class ArrayLiteralNode < Node
 	def initialize(element_nodes)
 		@element_nodes = element_nodes
 	end
@@ -380,7 +380,7 @@ class ArrayLiteralNode
 	end
 end
 
-class DictLiteralNode
+class DictLiteralNode < Node
 	def initialize(pair_nodes)
 		@pair_nodes = pair_nodes
 	end
@@ -391,7 +391,7 @@ class DictLiteralNode
 	end
 end
 
-class KeyValuePairNode
+class KeyValuePairNode < Node
 	def initialize(key, value)
 		@key, @value = key, value
 	end
@@ -403,7 +403,7 @@ class KeyValuePairNode
 	end
 end
 
-class IfStatementNode
+class IfStatementNode < Node
 	def initialize(condition, stat)
 		@condition, @stat = condition, stat
 	end
@@ -417,7 +417,7 @@ class IfStatementNode
 	end
 end
 
-class IfElseStatementNode
+class IfElseStatementNode < Node
 	def initialize(condition, stat, else_stat)
 		@condition, @stat, @else_stat = condition, stat, else_stat
 	end
@@ -433,7 +433,7 @@ class IfElseStatementNode
 	end
 end
 
-class WhileLoopNode
+class WhileLoopNode < Node
 	def initialize(condition, stat)
 		@condition, @stat = condition, stat
 	end
@@ -447,7 +447,7 @@ class WhileLoopNode
 	end
 end
 
-class ForLoopNode
+class ForLoopNode < Node
 	def initialize(decl, cond, control, stat)
 		@declaration, @condition, @control, @stat = decl, cond, control, stat
 	end
@@ -462,7 +462,7 @@ class ForLoopNode
 	end
 end
 
-class SubscriptNode
+class SubscriptNode < Node
 	def initialize(target_node, index_node)
 		@target_node, @index_node = target_node, index_node
 	end

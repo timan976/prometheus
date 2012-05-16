@@ -60,7 +60,6 @@ class PrometheusParser
 					[].concat(a).concat(b)
 				end
 				match(:top_level_statements, :function_definition) do |a, b|
-					puts "#{a.inspect} - #{b.inspect}"
 					[].concat(a).concat(b)
 				end
 				match(:function_definition)
@@ -365,13 +364,12 @@ class PrometheusParser
 
 		puts "Running #{filename}..."
 			@parser.logger.level = Logger::WARN
-			#begin
+			begin
 				val = @parser.parse(IO.read(filename))
 				val.evaluate(@@global_frame) if val != nil
-			#rescue Exception => e
-			#	puts "An error occured: #{e}"
-			#end
-		#puts "Scope is: #{@@global_frame}"
+			rescue Exception => e
+				puts "An error occured: #{e}"
+			end
 	end
 end
 
