@@ -43,7 +43,9 @@ Array map(Array values, Block block) {
 	return result;
 }
 
-print map(nums, ^(Integer a) { return a*3; });
+Block even = ^(Integer a) { return a % 2 == 0; }
+print map(nums, even);
+print nums.filter(even);
 Dict d = @[];
 d.add("name", "Tim");
 print d;
