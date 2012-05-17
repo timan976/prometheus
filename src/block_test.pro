@@ -2,11 +2,26 @@ Block double = ^(Integer a) {
 	return a*2;
 }
 
-Array nums = [1, 2, 3];
+Array range(Integer start, Integer end) {
+	Integer i = 0;
+	Array nums = [];
+	for(i = 0; i <= end; i++) {
+		nums.append(i);
+	}
+	return nums;
+}
+
+Array nums = range(1, 10);
+print "Nums: <nums>";
 print double(nums[2]);
-print nums.map(^(Integer a) {
+Array exp_nums = nums.map(^(Integer a) {
 	return a^2;
 });
+
+print nums.reject(^(Integer n) { return n >= 2; });
+print nums.filter(^(Integer n) { return n >= 2; });
+
+print exp_nums;
 print nums.map(double);
 
 Void foo() {
@@ -18,3 +33,17 @@ Void foo() {
 	b();
 }
 foo();
+
+Array map(Array values, Block block) {
+	Integer i;
+	Array result = [];
+	for(i = 0; i < values.length(); i++) {
+		result.append(block(values[i]));
+	}
+	return result;
+}
+
+print map(nums, ^(Integer a) { return a*3; });
+Dict d = @[];
+d.add("name", "Tim");
+print d;

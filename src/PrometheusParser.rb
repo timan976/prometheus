@@ -317,7 +317,9 @@ class PrometheusParser
 			rule :primary_exp do
 				match('(', :exp ,')') { |_, e, _| e }
 				match('@', '[', :key_value_list, ']') { |_, _, pairs, _| DictLiteralNode.new(pairs) }
+				match('@', '[', ']') { |_, _, _| DictLiteralNode.new() }
 				match('[', :argument_exp_list, ']') { |_, elements, _| ArrayLiteralNode.new(elements) }
+				match('[', ']') { |_, _| ArrayLiteralNode.new() }
 				match(:block_exp)
 				match(String) { |name| ScopeLookupNode.new(name) }
 				match(:const)

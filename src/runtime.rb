@@ -264,18 +264,22 @@ class PRMethodSignature
 	end
 end
 
-class PRObject
-	@@_mtable = {} # Method (signature) table
-	attr_accessor :super
+@@_mtables = {}
 
-	def initialize
-		@super = nil
-	end
+class PRObject
+	#@@_mtable = {} # Method (signature) table
+	attr_accessor :super
+	@super = nil
 
 	# This method needs to be called in order to expose methods
 	# in Prometheus
 	def self.add_method(method_signature)
-		@@_mtable[method_signature.name.to_sym] = method_signature
+		if not @@_mtables.has_key?(self) then
+			@@_mtables[self] = {}
+		end
+		mtable = @@_mtables[self]
+		mtable[method_signature.name.to_sym] = method_signature
+		#@@_mtable[method_signature.name.to_sym] = method_signature
 	end
 
 	def init
@@ -290,10 +294,18 @@ class PRObject
 		return PRBool.new(false)
 	end
 
-	def implements_method?(method_signature)
+	def self.implements_method?(method_signature)
 		return false if method_signature == nil
-		candidate = @@_mtable.fetch(method_signature.name.to_sym, nil)
-		return candidate.eql?(method_signature)
+		candidate = self._mtable.fetch(method_signature.name.to_sym, nil)
+		# TODO: Perhaps we should check the superclass if the signature
+		# doesn't match and there's a superclass?
+		return candidate.eql?(method_signature) if candidate != nil
+		return @super.implements_method?(method_signature) if @super != nil
+		return false
+	end
+
+	def implements_method?(method_signature)
+		return self.class.implements_method?(method_signature)
 	end
 
 	def description(scope_frame)
@@ -301,12 +313,23 @@ class PRObject
 	end
 
 	def self._mtable
-		@@_mtable
+		return @@_mtables.fetch(self, {})
+		#@@_mtable
+	end
+
+	def self.super
+		@super
+	end
+
+	def _mtable
+		return self.class._mtable
 	end
 end
 
 class PRBlock < PRObject
 	attr_reader :parameters
+	@super = PRObject
+
 	def initialize(params, body, closure)
 		@parameters, @body, @closure = params, body, closure
 	end
@@ -339,6 +362,8 @@ end
 
 class PRNumber < PRObject
 	attr_accessor :_value
+	@super = PRObject
+
 	def add(x, scope_frame)
 		assert_type(x, PRNumber)
 
@@ -407,6 +432,8 @@ class PRNumber < PRObject
 end
 
 class PRInteger < PRNumber
+	@super = PRNumber
+
 	def initialize(n = 0)
 		call_super(self, :initialize)
 		@_value = n.to_i
@@ -418,6 +445,8 @@ class PRInteger < PRNumber
 end
 
 class PRFloat < PRNumber
+	@super = PRNumber
+
 	def initialize(n = 0)
 		call_super(self, :initialize)
 		@_value = n.to_f
@@ -426,6 +455,8 @@ end
 
 class PRBool < PRObject
 	attr_accessor :_value
+	@super = PRObject
+
 	def initialize(tf)
 		call_super(self, :initialize)
 		@_value = tf
@@ -447,6 +478,8 @@ end
 
 class PRString < PRObject
 	attr_reader :_value
+	@super = PRObject
+
 	def initialize(str)
 		@_value = str
 	end
@@ -497,6 +530,7 @@ end
 
 class PRArray < PRObject
 	attr_reader :_elements
+	@super = PRObject
 
 	def initialize(elements)
 		@_elements = elements
@@ -524,6 +558,26 @@ class PRArray < PRObject
 		result = []
 		@_elements.each do |e|
 			result << block.call([e], scope_frame)
+		end
+		return PRArray.new(result)
+	end
+
+	def filter(block, scope_frame)
+		result = []
+		@_elements.each do |e|
+			if block.call([e], scope_frame)._value then
+				result << e
+			end
+		end
+		return PRArray.new(result)
+	end
+
+	def reject(block, scope_frame)
+		result = []
+		@_elements.each do |e|
+			if not block.call([e], scope_frame)._value then
+				result << e
+			end
 		end
 		return PRArray.new(result)
 	end
@@ -556,6 +610,7 @@ end
 
 class PRDict < PRObject
 	attr_reader :_rdict
+	@super = PRObject
 
 	def initialize(pairs)
 		@_rdict = {}
@@ -578,6 +633,10 @@ class PRDict < PRObject
 		end
 
 		return found_value
+	end
+
+	def add(key, value, scope_frame)
+		@_rdict[key] = value
 	end
 
 	def has_key(obj, scope_frame)
@@ -614,15 +673,15 @@ end
 # ===== END OF CLASSES ======
 
 def msg_send(prometheus_obj, method_signature, scope_frame, *args)
-	current = prometheus_obj
-	while current != nil do
-		if current.implements_method?(method_signature) then
+	current_class = prometheus_obj.class
+	while current_class != nil do
+		if current_class.implements_method?(method_signature) then
 			assert_arg_types(method_signature, *args)
 			#puts "Invoking method #{method_signature} on #{current}"
 			args << scope_frame
-			return current.send(method_signature.name.to_sym, *args)
+			return prometheus_obj.send(method_signature.name.to_sym, *args)
 		else
-			current = current.super
+			current_class = current_class.super
 		end
 	end
 	raise "Missing method #{method_signature}. Neither #{prometheus_obj} nor any superclass implements #{method_signature}."
@@ -655,6 +714,9 @@ PRArray.add_method(PRMethodSignature.new(:at, PRObject, false, [PRInteger]))
 PRArray.add_method(PRMethodSignature.new(:append, PRObject, false, [PRObject]))
 PRArray.add_method(PRMethodSignature.new(:length, PRInteger, false))
 PRArray.add_method(PRMethodSignature.new(:map, PRArray, false, [PRBlock]))
+PRArray.add_method(PRMethodSignature.new(:filter, PRArray, false, [PRBlock]))
+PRArray.add_method(PRMethodSignature.new(:reject, PRArray, false, [PRBlock]))
 
 # PRDict methods
 PRDict.add_method(PRMethodSignature.new(:fetch, PRObject, false, [PRObject]))
+PRDict.add_method(PRMethodSignature.new(:add, PRObject, false, [PRObject, PRObject]))

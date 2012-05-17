@@ -58,7 +58,6 @@ class ArithmeticOperatorNode < BinaryOperatorNode
 		arg = object_value(@b, scope_frame)
 
 		method_signature = PRMethodSignatureForObject(target, method_name)
-
 		if not target.implements_method?(method_signature) then
 			raise "Invalid type (#{target.class}) of left operand for '#{@op}'!"
 		end
@@ -370,7 +369,7 @@ class CompoundStatementNode < Node
 end
 
 class ArrayLiteralNode < Node
-	def initialize(element_nodes)
+	def initialize(element_nodes = [])
 		@element_nodes = element_nodes
 	end
 
@@ -381,7 +380,7 @@ class ArrayLiteralNode < Node
 end
 
 class DictLiteralNode < Node
-	def initialize(pair_nodes)
+	def initialize(pair_nodes = [])
 		@pair_nodes = pair_nodes
 	end
 
